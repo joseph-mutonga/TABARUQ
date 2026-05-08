@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders & Payments | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-plus-circle"></i> New Order</a></li>
+                <li id="ordersNavLink" style="display:none;"><a href="orders.html" class="active"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <h1>Recent Orders & Payments</h1>
+            <p style="color: var(--text-gray); margin-bottom: 2rem;">Confirm customer payments here once verified</p>
+
+            <div class="glass-card">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer Name</th>
+                                <th>Amount</th>
+                                <th>Method</th>
+                                <th>Payment Phone</th>
+                                <th>M-Pesa Receipt</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        async function loadData() {
+            try {
+                // We'll get payments instead because we need to confirm them
+                const response = await apiFetch('/payments');
+                const payments = response.data;
+                const body = document.getElementById('ordersBody');
+                
+                body.innerHTML = payments.map(p => `
+                    <tr style="${p.status === 'pending' && p.transaction_id ? 'background: rgba(16, 185, 129, 0.05);' : ''}">
+                        <td>${p.order_id ? `#${p.order_id}` : '<span class="badge" style="background:var(--accent-warning)">UNLINKED</span>'}</td>
+                        <td>${p.customer_name || 'Guest'}</td>
+                        <td>${formatCurrency(p.amount)}</td>
+                        <td><span class="badge" style="background: ${p.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'};">${p.payment_method}</span></td>
+                        <td>${p.phone_number || '-'}</td>
+                        <td>${p.transaction_id || (p.payment_method === 'Cash' ? 'N/A' : '<span style="color:var(--text-gray)">Waiting...</span>')}</td>
+                        <td><span style="color: ${p.status === 'confirmed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${p.status}</span></td>
+                        <td>
+                            ${p.status === 'pending' && p.transaction_id ? 
+                                `<button class="btn btn-primary" onclick="confirmPayment(${p.id}, ${p.order_id || 'null'})" style="padding: 0.5rem 1rem; animation: pulse 2s infinite;">${p.order_id ? 'Confirm' : 'Link & Confirm'}</button>` : 
+                                p.status === 'confirmed' ? '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Confirmed</span>' : 
+                                p.payment_method === 'Cash' ? '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Paid</span>' : 'Waiting...'
+                            }
+                        </td>
+                    </tr>
+                `).join('');
+                updateBadge();
+            } catch (err) { alert(err.message); }
+        }
+
+        async function updateBadge() {
+            try {
+                const response = await apiFetch('/payments/pending-count');
+                const badge = document.getElementById('pendingBadge');
+                if (response.count > 0) {
+                    badge.textContent = response.count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        setInterval(updateBadge, 30000);
+
+        async function confirmPayment(paymentId, orderId) {
+            let finalOrderId = orderId;
+            if (!orderId) {
+                finalOrderId = prompt('Enter the Order ID to link this payment to:');
+                if (!finalOrderId) return;
+            }
+
+            if (confirm(`Confirm payment for Order #${finalOrderId}?`)) {
+                try {
+                    await apiFetch(`/payments/confirm/${paymentId}`, {
+                        method: 'POST',
+                        body: JSON.stringify({ orderId: finalOrderId })
+                    });
+                    loadData();
+                } catch (err) { alert(err.message); }
+            }
+        }
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || user.role !== 'admin') {
+            window.location.href = 'index.html';
+        } else {
+            document.getElementById('adminNavLink').style.display = 'block';
+            document.getElementById('ordersNavLink').style.display = 'block';
+            loadData();
+        }
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

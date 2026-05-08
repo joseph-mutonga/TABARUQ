@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Reports | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="reports.html" class="active"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <h1>Business Reports</h1>
+            
+            <div class="glass-card" style="margin-bottom: 2rem;">
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                    <button class="btn" style="background: var(--card-bg); border: 1px solid var(--primary);" onclick="setRange('today')">Today</button>
+                    <button class="btn" style="background: var(--card-bg); border: 1px solid var(--primary);" onclick="setRange('week')">This Week</button>
+                    <button class="btn" style="background: var(--card-bg); border: 1px solid var(--primary);" onclick="setRange('month')">This Month</button>
+                    <button class="btn" style="background: var(--card-bg); border: 1px solid var(--primary);" onclick="setRange('year')">This Year</button>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Start Date</label>
+                        <input type="date" id="startDate" class="form-control">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>End Date</label>
+                        <input type="date" id="endDate" class="form-control">
+                    </div>
+                    <button class="btn btn-primary" onclick="generateReports()">Generate Reports</button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="glass-card stat-card">
+                    <p style="color: var(--text-gray);">Period Sales</p>
+                    <div class="stat-value" id="pSales">KES 0</div>
+                </div>
+                <div class="glass-card stat-card">
+                    <p style="color: var(--text-gray);">Period Expenses</p>
+                    <div class="stat-value" id="pExpenses" style="color: var(--accent-danger);">KES 0</div>
+                </div>
+                <div class="glass-card stat-card">
+                    <p style="color: var(--text-gray);">Net Profit</p>
+                    <div class="stat-value" id="pProfit" style="color: var(--accent-success);">KES 0</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; margin-top: 2rem;">
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3>Daily Sales Breakdown</h3>
+                        <button class="btn" style="background: var(--accent-success); padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="exportCSV('salesReportTable')"><i class="fas fa-file-csv"></i> Export CSV</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="salesReportTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Order Count</th>
+                                    <th>Total Sales</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salesReportBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <h3>Top Selling Items</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Sold</th>
+                                </tr>
+                            </thead>
+                            <tbody id="popularItemsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-top: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Detailed Transaction History</h3>
+                    <button class="btn" style="background: var(--accent-success); padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="exportCSV('transactionHistoryBody')"><i class="fas fa-file-csv"></i> Export CSV</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Date & Time</th>
+                                <th>Amount</th>
+                                <th>Method</th>
+                                <th>Status</th>
+                                <th>Cashier</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionHistoryBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        const todayStr = now.toISOString().split('T')[0];
+        document.getElementById('startDate').value = firstDay;
+        document.getElementById('endDate').value = todayStr;
+
+        function setRange(range) {
+            const date = new Date();
+            let start, end;
+            
+            error_log = "";
+            try {
+                if (range === 'today') {
+                    start = end = date.toISOString().split('T')[0];
+                } else if (range === 'week') {
+                    const day = date.getDay() || 7;
+                    date.setHours(-24 * (day - 1));
+                    start = date.toISOString().split('T')[0];
+                    end = new Date().toISOString().split('T')[0];
+                } else if (range === 'month') {
+                    start = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
+                    end = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
+                } else if (range === 'year') {
+                    start = new Date(date.getFullYear(), 0, 1).toISOString().split('T')[0];
+                    end = new Date(date.getFullYear(), 11, 31).toISOString().split('T')[0];
+                }
+                
+                document.getElementById('startDate').value = start;
+                document.getElementById('endDate').value = end;
+                generateReports();
+            } catch (e) { console.error(e); }
+        }
+
+        async function generateReports() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+
+            try {
+                const profitResp = await apiFetch(`/reports/profit-loss?startDate=${start}&endDate=${end}`);
+                const salesResp = await apiFetch(`/reports/sales?startDate=${start}&endDate=${end}`);
+                const historyResp = await apiFetch(`/reports/transactions?startDate=${start}&endDate=${end}`);
+                
+                document.getElementById('pSales').textContent = formatCurrency(profitResp.data.totalSales);
+                document.getElementById('pExpenses').textContent = formatCurrency(profitResp.data.totalExpenses);
+                document.getElementById('pProfit').textContent = formatCurrency(profitResp.data.netProfit);
+
+                document.getElementById('salesReportBody').innerHTML = salesResp.data.map(s => `
+                    <tr>
+                        <td>${new Date(s.date).toLocaleDateString()}</td>
+                        <td>${s.order_count}</td>
+                        <td>${formatCurrency(s.total_sales)}</td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('transactionHistoryBody').innerHTML = historyResp.data.map(t => `
+                    <tr>
+                        <td>#${t.id}</td>
+                        <td>${t.customer_name || 'Guest'}</td>
+                        <td>${new Date(t.created_at).toLocaleString()}</td>
+                        <td>${formatCurrency(t.total_amount)}</td>
+                        <td><span class="badge" style="background: ${t.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'}">${t.payment_method || 'M-Pesa'}</span></td>
+                        <td><span style="color: ${t.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${t.status}</span></td>
+                        <td>${t.cashier_name}</td>
+                    </tr>
+                `).join('');
+
+                // Load popular items
+                const popResp = await apiFetch('/reports/popular');
+                document.getElementById('popularItemsBody').innerHTML = popResp.data.map(i => `
+                    <tr>
+                        <td>${i.name}</td>
+                        <td>${i.total_sold} ${i.unit || ''}</td>
+                    </tr>
+                `).join('');
+            } catch (err) { alert(err.message); }
+        }
+
+        async function checkPendingPayments() {
+            try {
+                const response = await apiFetch('/payments/pending-count');
+                const badge = document.getElementById('pendingBadge');
+                if (response.count > 0) {
+                    badge.textContent = response.count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        checkPendingPayments();
+        setInterval(checkPendingPayments, 30000);
+
+        function exportCSV(tableId) {
+            const table = document.getElementById(tableId).parentNode.querySelector('table');
+            let csv = [];
+            const rows = table.querySelectorAll('tr');
+            for (const row of rows) {
+                const cols = row.querySelectorAll('td, th');
+                const rowData = Array.from(cols).map(col => col.innerText.replace(/,/g, ''));
+                csv.push(rowData.join(','));
+            }
+            const csvFile = new Blob([csv.join('\n')], { type: 'text/csv' });
+            const downloadLink = document.createElement('a');
+            downloadLink.download = `${tableId}_${new Date().toISOString().split('T')[0]}.csv`;
+            downloadLink.href = window.URL.createObjectURL(csvFile);
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        generateReports();
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cashier Dashboard | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html" class="active"><i class="fas fa-plus-circle"></i> New Order</a></li>
+                <li id="ordersNavLink" style="display:none;"><a href="orders.html"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1>New Customer Order</h1>
+                <div id="userInfo"></div>
+            </header>
+
+            <div class="order-grid">
+                <div class="glass-card">
+                    <input type="text" id="itemSearch" class="form-control" placeholder="Search menu..." style="margin-bottom: 1rem;">
+                    <div id="menuItems" class="item-list">
+                        <!-- Menu items loaded here -->
+                    </div>
+                </div>
+
+                <div class="glass-card" style="display: flex; flex-direction: column; max-height: 80vh;">
+                    <h3>Current Order</h3>
+                    <div id="cartItems" style="flex: 1; overflow-y: auto; margin:1rem 0;">
+                        <p style="color: var(--text-gray); text-align: center;">No items selected</p>
+                    </div>
+                    <div style="border-top: 1px solid #334155; padding-top: 1rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                            <span>Total</span>
+                            <span id="orderTotal" style="font-size: 1.5rem; font-weight: bold;">KES 0</span>
+                        </div>
+                        <button id="checkoutBtn" class="btn btn-primary" style="width: 100%;" disabled>Checkout</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkoutModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center;">
+        <div class="glass-card" style="width: 400px;">
+            <h2>Complete Order</h2>
+            <div class="form-group">
+                <label>Customer Name</label>
+                <input type="text" id="custName" class="form-control" placeholder="E.g., John Doe" style="margin-bottom: 1rem;">
+            </div>
+            <div class="form-group">
+                <label>Payment Method</label>
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                    <button class="btn" id="mpesaTab" style="flex:1; background: var(--accent-success);" onclick="setPaymentMethod('mpesa')">M-Pesa</button>
+                    <button class="btn" id="cashTab" style="flex:1; background: var(--card-bg);" onclick="setPaymentMethod('cash')">Cash</button>
+                </div>
+            </div>
+            <div id="mpesaFields">
+                <div class="form-group">
+                    <label>Customer Phone (M-Pesa)</label>
+                    <input type="text" id="custPhone" class="form-control" placeholder="2547XXXXXXXX" value="2547">
+                </div>
+            </div>
+            <div id="cashFields" style="display:none;">
+                <p style="color: var(--accent-success); margin-bottom: 1rem;"><i class="fas fa-check-circle"></i> Mark as paid immediately</p>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn" onclick="document.getElementById('checkoutModal').style.display='none'">Cancel</button>
+                <button class="btn btn-primary" id="processPaymentBtn">Complete Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        let inventory = [];
+        let cart = [];
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user) window.location.href = '../index.html';
+        document.getElementById('userInfo').textContent = user.username;
+        
+        if (user.role === 'admin') {
+            document.getElementById('adminNavLink').style.display = 'block';
+            document.getElementById('ordersNavLink').style.display = 'block';
+        }
+
+        async function loadMenu() {
+            try {
+                const response = await apiFetch('/inventory');
+                inventory = response.data;
+                renderMenu(inventory);
+            } catch (err) { alert(err.message); }
+        }
+
+        function renderMenu(items) {
+            const menu = document.getElementById('menuItems');
+            menu.innerHTML = items.map(item => `
+                <div class="item-card" onclick="addToCart(${item.id})">
+                    <p style="font-weight: 600;">${item.name}</p>
+                    <p style="color: var(--primary); margin-top: 5px;">${formatCurrency(item.selling_price)}</p>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('itemSearch').oninput = (e) => {
+            const query = e.target.value.toLowerCase();
+            renderMenu(inventory.filter(i => i.name.toLowerCase().includes(query)));
+        };
+
+        function addToCart(id) {
+            const item = inventory.find(i => i.id === id);
+            const cartItem = cart.find(c => c.id === id);
+            
+            if (cartItem) {
+                cartItem.quantity++;
+            } else {
+                cart.push({ ...item, quantity: 1 });
+            }
+            renderCart();
+        }
+
+        function renderCart() {
+            const cartList = document.getElementById('cartItems');
+            if (cart.length === 0) {
+                cartList.innerHTML = '<p style="color: var(--text-gray); text-align: center;">No items selected</p>';
+                document.getElementById('orderTotal').textContent = 'KES 0';
+                document.getElementById('checkoutBtn').disabled = true;
+                return;
+            }
+
+            let total = 0;
+            cartList.innerHTML = cart.map((item, index) => {
+                total += item.selling_price * item.quantity;
+                return `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 5px;">
+                        <div>
+                            <p>${item.name}</p>
+                            <small>${formatCurrency(item.selling_price)} x ${item.quantity}</small>
+                        </div>
+                        <button onclick="removeFromCart(${index})" style="background: none; border: none; color: var(--accent-danger); cursor: pointer;"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('orderTotal').textContent = formatCurrency(total);
+            document.getElementById('checkoutBtn').disabled = false;
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            renderCart();
+        }
+
+        document.getElementById('checkoutBtn').onclick = () => {
+            document.getElementById('checkoutModal').style.display = 'flex';
+        };
+
+        let currentMethod = 'mpesa';
+
+        function setPaymentMethod(method) {
+            currentMethod = method;
+            const mpesaTab = document.getElementById('mpesaTab');
+            const cashTab = document.getElementById('cashTab');
+            const mpesaFields = document.getElementById('mpesaFields');
+            const cashFields = document.getElementById('cashFields');
+
+            if (method === 'mpesa') {
+                mpesaTab.style.background = 'var(--accent-success)';
+                cashTab.style.background = 'var(--card-bg)';
+                mpesaFields.style.display = 'block';
+                cashFields.style.display = 'none';
+                document.getElementById('processPaymentBtn').textContent = 'Push STK';
+            } else {
+                mpesaTab.style.background = 'var(--card-bg)';
+                cashTab.style.background = 'var(--accent-success)';
+                mpesaFields.style.display = 'none';
+                cashFields.style.display = 'block';
+                document.getElementById('processPaymentBtn').textContent = 'Complete Cash Sale';
+            }
+        }
+
+        document.getElementById('processPaymentBtn').onclick = async () => {
+            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
+            const customerName = document.getElementById('custName').value.trim();
+            
+            try {
+                // 1. Create Order
+                const orderResp = await apiFetch('/orders', {
+                    method: 'POST',
+                    body: JSON.stringify({ items: cart, total_amount: total, customer_name: customerName })
+                });
+
+                if (currentMethod === 'mpesa') {
+                    const phone = document.getElementById('custPhone').value;
+                    // 2. Initiate STK Push
+                    await apiFetch('/payments/stk-push', {
+                        method: 'POST',
+                        body: JSON.stringify({ orderId: orderResp.orderId, phoneNumber: phone, amount: total, customer_name: customerName })
+                    });
+                    alert('STK Push sent to customer phone. Please check status in Orders page.');
+                } else {
+                    // 2. Process Cash
+                    await apiFetch('/payments/cash', {
+                        method: 'POST',
+                        body: JSON.stringify({ orderId: orderResp.orderId, amount: total })
+                    });
+                    alert('Cash payment recorded. Order completed.');
+                }
+
+                cart = [];
+                renderCart();
+                document.getElementById('checkoutModal').style.display = 'none';
+                loadMenu(); // Refresh stock
+            } catch (err) { alert(err.message); }
+        };
+
+        loadMenu();
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 500px;
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
+                <li><a href="inventory.html" class="active"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1>Inventory Management</h1>
+                <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add New Item</button>
+            </header>
+
+            <div class="glass-card">
+                <input type="text" id="inventorySearch" class="form-control" placeholder="Search items..." style="margin-bottom: 1rem;">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>Stock</th>
+                                <th>Cost</th>
+                                <th>Selling</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="itemModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add Item</h2>
+            <form id="itemForm">
+                <input type="hidden" id="itemId">
+                <div class="form-group">
+                    <label>Item Name</label>
+                    <input type="text" id="itemName" class="form-control" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="itemCategory" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Unit</label>
+                        <input type="text" id="itemUnit" class="form-control" placeholder="pcs, kg, etc." required>
+                    </div>
+                </div>
+
+                <div id="initialStockGroup" class="form-group">
+                    <label>Initial Quantity</label>
+                    <input type="number" id="itemQty" class="form-control" step="0.01" value="0">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Cost Price</label>
+                        <input type="number" id="itemCost" class="form-control" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Selling Price</label>
+                        <input type="number" id="itemSelling" class="form-control" step="0.01" required>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn" style="background: var(--text-gray);" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Restock Modal -->
+    <div id="restockModal" class="modal">
+        <div class="modal-content">
+            <h2>Restock Item</h2>
+            <form id="restockForm">
+                <input type="hidden" id="restockItemId">
+                <div class="form-group">
+                    <label id="restockItemName" style="font-weight: 600; margin-bottom: 1rem; display: block;"></label>
+                </div>
+                <div class="form-group">
+                    <label>Quantity to Add</label>
+                    <input type="number" id="restockQty" class="form-control" required step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Reason</label>
+                    <select id="restockReason" class="form-control">
+                        <option value="Restock - Purchase">Restock - Purchase</option>
+                        <option value="Restock - Return">Restock - Return</option>
+                        <option value="Adjustment">Adjustment</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn" style="background: var(--text-gray);" onclick="document.getElementById('restockModal').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn btn-success" style="background: var(--accent-success); color: white;">Update Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        let inventory = [];
+
+        async function loadInventory() {
+            try {
+                const response = await apiFetch('/inventory');
+                inventory = response.data;
+                renderInventory(inventory);
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function renderInventory(items) {
+            const body = document.getElementById('inventoryBody');
+            body.innerHTML = items.map(item => `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.category}</td>
+                    <td><span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span></td>
+                    <td>${formatCurrency(item.cost_price)}</td>
+                    <td>${formatCurrency(item.selling_price)}</td>
+                    <td>
+                        <button class="btn" style="padding: 0.5rem; background: var(--accent-success);" title="Restock" onclick="openRestockModal(${item.id})"><i class="fas fa-boxes"></i></button>
+                        <button class="btn" style="padding: 0.5rem; background: var(--primary);" onclick="editItem(${item.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn" style="padding: 0.5rem; background: var(--accent-danger);" onclick="deleteItem(${item.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('inventorySearch').oninput = (e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = inventory.filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query));
+            renderInventory(filtered);
+        };
+
+        function openModal(item = null) {
+            document.getElementById('itemModal').style.display = 'flex';
+            if (item) {
+                document.getElementById('modalTitle').textContent = 'Edit Item';
+                document.getElementById('itemId').value = item.id;
+                document.getElementById('itemName').value = item.name;
+                document.getElementById('itemCategory').value = item.category;
+                document.getElementById('itemUnit').value = item.unit;
+                document.getElementById('itemCost').value = item.cost_price;
+                document.getElementById('itemSelling').value = item.selling_price;
+                document.getElementById('initialStockGroup').style.display = 'none';
+            } else {
+                document.getElementById('modalTitle').textContent = 'Add Item';
+                document.getElementById('itemForm').reset();
+                document.getElementById('itemId').value = '';
+                document.getElementById('initialStockGroup').style.display = 'block';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('itemModal').style.display = 'none';
+        }
+
+        function editItem(id) {
+            const item = inventory.find(i => i.id === id);
+            openModal(item);
+        }
+
+        async function deleteItem(id) {
+            if (confirm('Are you sure you want to delete this item?')) {
+                try {
+                    await apiFetch(`/inventory/${id}`, { method: 'DELETE' });
+                    loadInventory();
+                } catch (err) {
+                    alert(err.message);
+                }
+            }
+        }
+
+        function openRestockModal(id) {
+            const item = inventory.find(i => i.id === id);
+            document.getElementById('restockItemId').value = id;
+            document.getElementById('restockItemName').textContent = `Adding stock for: ${item.name}`;
+            document.getElementById('restockModal').style.display = 'flex';
+        }
+
+        document.getElementById('restockForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('restockItemId').value;
+            const data = {
+                quantity: parseFloat(document.getElementById('restockQty').value),
+                reason: document.getElementById('restockReason').value
+            };
+            try {
+                await apiFetch(`/inventory/restock/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                document.getElementById('restockModal').style.display = 'none';
+                document.getElementById('restockForm').reset();
+                loadInventory();
+            } catch (err) { alert(err.message); }
+        };
+
+        document.getElementById('itemForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('itemId').value;
+            const data = {
+                name: document.getElementById('itemName').value,
+                category: document.getElementById('itemCategory').value,
+                unit: document.getElementById('itemUnit').value,
+                cost_price: document.getElementById('itemCost').value,
+                selling_price: document.getElementById('itemSelling').value,
+                quantity: document.getElementById('itemQty').value
+            };
+
+            try {
+                if (id) {
+                    await apiFetch(`/inventory/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    await apiFetch('/inventory', { method: 'POST', body: JSON.stringify(data) });
+                }
+                closeModal();
+                loadInventory();
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        loadInventory();
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

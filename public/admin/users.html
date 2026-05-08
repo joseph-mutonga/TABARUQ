@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="users.html" class="active"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1>User Management</h1>
+                <button class="btn btn-primary" onclick="document.getElementById('userModal').style.display='flex'">Create Cashier</button>
+            </header>
+
+            <div class="glass-card">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Created At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="userModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center;">
+        <div class="glass-card" style="width: 400px;">
+            <h2>Create New User</h2>
+            <form id="userForm">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="regUser" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPass" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="regRole" class="form-control">
+                        <option value="cashier">Cashier</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="document.getElementById('userModal').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        async function loadUsers() {
+            try {
+                const response = await apiFetch('/auth/users');
+                document.getElementById('userBody').innerHTML = response.data.map(u => `
+                    <tr>
+                        <td>${u.username}</td>
+                        <td><span style="background: ${u.role==='admin'?'var(--primary)':'var(--card-bg)'}; padding: 3px 8px; border-radius: 4px;">${u.role}</span></td>
+                        <td>${new Date(u.created_at).toLocaleString()}</td>
+                        <td>
+                            ${u.username !== 'admin' ? `<button class="btn" style="background: var(--accent-danger); padding:0.5rem;" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) { alert(err.message); }
+        }
+
+        document.getElementById('userForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                username: document.getElementById('regUser').value,
+                password: document.getElementById('regPass').value,
+                role: document.getElementById('regRole').value
+            };
+            try {
+                await apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(data) });
+                document.getElementById('userModal').style.display = 'none';
+                loadUsers();
+            } catch (err) { alert(err.message); }
+        };
+
+        async function deleteUser(id) {
+            if (confirm('Delete this user?')) {
+                try {
+                    await apiFetch(`/auth/users/${id}`, { method: 'DELETE' });
+                    loadUsers();
+                } catch (err) { alert(err.message); }
+            }
+        }
+
+        loadUsers();
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

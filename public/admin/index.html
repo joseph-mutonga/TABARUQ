@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html" class="active"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1>Admin Dashboard</h1>
+                <div id="userInfo"></div>
+            </header>
+
+            <div class="stats-grid">
+                <div class="glass-card stat-card">
+                    <p style="color: var(--text-gray);">Today's Sales</p>
+                    <div class="stat-value" id="todaySales">KES 0</div>
+                </div>
+                <div class="glass-card stat-card">
+                    <p style="color: var(--text-gray);">Today's Expenses</p>
+                    <div class="stat-value" id="todayExpenses" style="color: var(--accent-danger);">KES 0</div>
+                </div>
+                <div class="glass-card stat-card">
+                    <p style="color: var(--text-gray);">Daily Profit</p>
+                    <div class="stat-value" id="todayProfit" style="color: var(--accent-success);">KES 0</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; margin-top: 2rem;">
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3>Recent Transactions</h3>
+                        <a href="reports.html" class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; background: var(--glass);">View All</a>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th>Cashier</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>Payment</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentOrdersBody">
+                                <!-- Data populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+        
+        document.getElementById('userInfo').textContent = `Welcome, ${user.username}`;
+        document.getElementById('logoutBtn').onclick = () => {
+            localStorage.clear();
+            window.location.href = '../index.html';
+        };
+
+        async function loadStats() {
+            try {
+                const response = await apiFetch('/dashboard/stats');
+                const data = response.data;
+                
+                document.getElementById('todaySales').textContent = formatCurrency(data.todaySales);
+                document.getElementById('todayExpenses').textContent = formatCurrency(data.todayExpenses);
+                document.getElementById('todayProfit').textContent = formatCurrency(data.todaySales - data.todayExpenses);
+
+                const ordersTable = document.getElementById('recentOrdersBody');
+                ordersTable.innerHTML = data.recentOrders.map(o => `
+                    <tr>
+                        <td>#${o.id}</td>
+                        <td>${o.customer_name || 'Guest'}</td>
+                        <td>${o.cashier_name}</td>
+                        <td>${formatCurrency(o.total_amount)}</td>
+                        <td><span class="badge" style="background: ${o.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'}">${o.payment_method || 'N/A'}</span></td>
+                        <td><span style="color: ${o.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${o.status}</span></td>
+                        <td><span style="color: ${o.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${o.payment_status}</span></td>
+                        <td>${new Date(o.created_at).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function checkPendingPayments() {
+            try {
+                const response = await apiFetch('/payments/pending-count');
+                const badge = document.getElementById('pendingBadge');
+                if (response.count > 0) {
+                    badge.textContent = response.count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        loadStats();
+        checkPendingPayments();
+        setInterval(checkPendingPayments, 30000);
+    </script>
+</body>
+</html>
