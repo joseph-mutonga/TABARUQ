@@ -22,6 +22,7 @@ app.use('/api/orders', require('./routes/orders'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/customers', require('./routes/customers'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 // Error handling

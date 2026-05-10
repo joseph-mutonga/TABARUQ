@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B7410E" />
+      <stop offset="100%" stop-color="#E5A24D" />
+    </linearGradient>
+  </defs>
+  <rect width="900" height="900" fill="none" />
+  <g transform="translate(450,420) scale(1.1)">
+    <circle cx="0" cy="-60" r="110" fill="url(#grad)" opacity="0.18" />
+    <path d="M-200 120 C -140 0 140 0 200 120 L 200 180 C 140 60 -140 60 -200 180 Z" fill="url(#grad)" opacity="0.12" />
+    <path d="M-140 -50 C -110 -140 110 -140 140 -50 L 140 30 C 110 -40 -110 -40 -140 30 Z" fill="url(#grad)" opacity="0.12" />
+    <path d="M0 -200 L -25 -260 L 25 -260 Z" fill="url(#grad)" opacity="0.18" />
+    <text x="0" y="210" text-anchor="middle" font-family="Inter, sans-serif" font-size="80" fill="#7A4B24" opacity="0.16">TABARUQ</text>
+    <text x="0" y="280" text-anchor="middle" font-family="Inter, sans-serif" font-size="32" fill="#7A4B24" opacity="0.12">Swahili Foods</text>
+  </g>
+</svg>

@@ -3,9 +3,26 @@ const db = require('../config/db');
 exports.getStats = async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
-        
-        const [sales] = await db.execute('SELECT SUM(total_amount) as total FROM orders WHERE payment_status = "paid" AND DATE(created_at) = ?', [today]);
-        const [expenses] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE expense_date = ?', [today]);
+
+        const [[sales]] = await db.execute('SELECT SUM(total_amount) as total FROM orders WHERE payment_status = "paid" AND DATE(created_at) = ?', [today]);
+        const [[expenses]] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE expense_date = ?', [today]);
+        const [[users]] = await db.execute('SELECT COUNT(*) as total FROM users');
+        const [[pendingPayments]] = await db.execute('SELECT COUNT(*) as total FROM payments WHERE status = "pending"');
+        const [[dueInvoices]] = await db.execute('SELECT COUNT(*) as total FROM orders WHERE payment_status != "paid"');
+        const [[itemsCount]] = await db.execute('SELECT COUNT(*) as total FROM inventory');
+        const [[lowStock]] = await db.execute('SELECT COUNT(*) as total FROM inventory WHERE quantity <= low_stock_threshold');
+        const [[storesCount]] = await db.execute('SELECT COUNT(DISTINCT supplier) as total FROM inventory WHERE supplier IS NOT NULL AND supplier != ""');
+        const [[supplierValue]] = await db.execute('SELECT SUM(cost_price * quantity) as total FROM inventory');
+        const [topProducts] = await db.execute(`
+            SELECT i.name, SUM(oi.quantity) as sold, SUM(oi.subtotal) as revenue
+            FROM order_items oi
+            JOIN inventory i ON oi.item_id = i.id
+            GROUP BY oi.item_id
+            ORDER BY sold DESC
+            LIMIT 15
+        `);
+        const [[cashSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method = "Cash" AND status = "confirmed"');
+        const [[mpesaSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method LIKE "%M-Pesa%" AND status = "confirmed"');
 
         const [recentOrders] = await db.execute(`
             SELECT o.*, o.customer_name, u.username as cashier_name, p.payment_method 
@@ -18,9 +35,35 @@ exports.getStats = async (req, res) => {
         res.json({
             success: true,
             data: {
-                todaySales: sales[0].total || 0,
-                todayExpenses: expenses[0].total || 0,
-
+                todaySales: sales.total || 0,
+                todayExpenses: expenses.total || 0,
+                allUsers: users.total || 0,
+                smsOutbox: pendingPayments.total || 0,
+                supplierBalances: supplierValue.total || 0,
+                stores: storesCount.total || 0,
+                dueInvoices: dueInvoices.total || 0,
+                itemsCount: itemsCount.total || 0,
+                itemsNeedsRestocking: lowStock.total || 0,
+                openSales: dueInvoices.total || 0,
+                topProducts,
+                accountReport: [
+                    {
+                        account: 'Petty Cash',
+                        code: '87328',
+                        in: cashSales.total || 0,
+                        out: expenses.total || 0,
+                        bal: (cashSales.total || 0) - (expenses.total || 0)
+                    },
+                    {
+                        account: 'Paybill 522123',
+                        code: '522123',
+                        in: mpesaSales.total || 0,
+                        out: 0,
+                        bal: mpesaSales.total || 0
+                    },
+                    { account: 'KCB', code: '1181575397', in: 0, out: 0, bal: 0 },
+                    { account: 'Sasa', code: '000002', in: 0, out: 0, bal: 0 }
+                ],
                 recentOrders
             }
         });

@@ -22,27 +22,29 @@
 
         <main class="container">
             <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1>New Customer Order</h1>
-                <div id="userInfo"></div>
+                <div>
+                    <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Food & Drinks POS</h1>
+                    <p class="card-small" style="color: #ffffff; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Choose menu items, manage food categories, and close orders with cash or M-Pesa.</p>
+                </div>
+                <div id="userInfo" style="color: #ffffff; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.15);"></div>
             </header>
 
             <div class="order-grid">
                 <div class="glass-card">
-                    <input type="text" id="itemSearch" class="form-control" placeholder="Search menu..." style="margin-bottom: 1rem;">
-                    <div id="menuItems" class="item-list">
-                        <!-- Menu items loaded here -->
-                    </div>
+                    <div class="category-filters" id="categoryFilters"></div>
+                    <input type="text" id="itemSearch" class="form-control" placeholder="Search menu items..." style="margin-bottom: 1rem;">
+                    <div id="menuItems" class="item-list"></div>
                 </div>
 
                 <div class="glass-card" style="display: flex; flex-direction: column; max-height: 80vh;">
-                    <h3>Current Order</h3>
+                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Current Order</h3>
                     <div id="cartItems" style="flex: 1; overflow-y: auto; margin:1rem 0;">
-                        <p style="color: var(--text-gray); text-align: center;">No items selected</p>
+                        <p style="color: #ffffff; text-align: center; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">No items selected</p>
                     </div>
                     <div style="border-top: 1px solid #334155; padding-top: 1rem;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
-                            <span>Total</span>
-                            <span id="orderTotal" style="font-size: 1.5rem; font-weight: bold;">KES 0</span>
+                            <span style="color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Total</span>
+                            <span id="orderTotal" style="font-size: 1.5rem; font-weight: bold; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">KES 0</span>
                         </div>
                         <button id="checkoutBtn" class="btn btn-primary" style="width: 100%;" disabled>Checkout</button>
                     </div>
@@ -52,9 +54,9 @@
     </div>
 
     <!-- Checkout Modal -->
-    <div id="checkoutModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center;">
-        <div class="glass-card" style="width: 400px;">
-            <h2>Complete Order</h2>
+    <div id="checkoutModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); justify-content:center; align-items:center;">
+        <div class="glass-card" style="width: 420px;">
+            <h2 style="color: #ffffff; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.15); margin-bottom: 1.5rem;">Complete Order</h2>
             <div class="form-group">
                 <label>Customer Name</label>
                 <input type="text" id="custName" class="form-control" placeholder="E.g., John Doe" style="margin-bottom: 1rem;">
@@ -73,10 +75,10 @@
                 </div>
             </div>
             <div id="cashFields" style="display:none;">
-                <p style="color: var(--accent-success); margin-bottom: 1rem;"><i class="fas fa-check-circle"></i> Mark as paid immediately</p>
+                <p style="color: var(--accent-success); margin-bottom: 1rem;"><i class="fas fa-check-circle"></i> Cash sales are recorded immediately.</p>
             </div>
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                <button class="btn" onclick="document.getElementById('checkoutModal').style.display='none'">Cancel</button>
+                <button class="btn" style="background: #64748b; color: white; font-weight: 700;" onclick="document.getElementById('checkoutModal').style.display='none'">Cancel</button>
                 <button class="btn btn-primary" id="processPaymentBtn">Complete Payment</button>
             </div>
         </div>
@@ -86,11 +88,12 @@
     <script>
         let inventory = [];
         let cart = [];
+        let selectedCategory = 'All';
 
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user) window.location.href = '../index.html';
         document.getElementById('userInfo').textContent = user.username;
-        
+
         if (user.role === 'admin') {
             document.getElementById('adminNavLink').style.display = 'block';
             document.getElementById('ordersNavLink').style.display = 'block';
@@ -100,29 +103,59 @@
             try {
                 const response = await apiFetch('/inventory');
                 inventory = response.data;
-                renderMenu(inventory);
+                renderCategoryFilters(inventory);
+                renderMenu(getFilteredItems());
             } catch (err) { alert(err.message); }
+        }
+
+        function getFilteredItems() {
+            const query = document.getElementById('itemSearch').value.toLowerCase();
+            return inventory.filter(item => {
+                const matchesQuery = item.name.toLowerCase().includes(query) || (item.category || '').toLowerCase().includes(query);
+                const matchesCategory = selectedCategory === 'All' || (item.category || 'Others') === selectedCategory;
+                return matchesQuery && matchesCategory;
+            });
+        }
+
+        function renderCategoryFilters(items) {
+            const filters = document.getElementById('categoryFilters');
+            const categories = ['All', ...new Set(items.map(item => item.category || 'Others'))];
+            filters.innerHTML = categories.map(category => `
+                <span class="category-pill ${category === selectedCategory ? 'active' : ''}" onclick="setCategory('${category}')">${category}</span>
+            `).join('');
+        }
+
+        function setCategory(category) {
+            selectedCategory = category;
+            renderCategoryFilters(inventory);
+            renderMenu(getFilteredItems());
         }
 
         function renderMenu(items) {
             const menu = document.getElementById('menuItems');
+            if (!items.length) {
+                menu.innerHTML = '<p style="color: rgba(255,255,255,0.75);">No menu items match your search.</p>';
+                return;
+            }
             menu.innerHTML = items.map(item => `
-                <div class="item-card" onclick="addToCart(${item.id})">
-                    <p style="font-weight: 600;">${item.name}</p>
-                    <p style="color: var(--primary); margin-top: 5px;">${formatCurrency(item.selling_price)}</p>
+                <div class="product-card" onclick="addToCart(${item.id})">
+                    <div style="display:flex; justify-content:space-between; gap: 1rem; align-items:center;">
+                        <strong>${item.name}</strong>
+                        <span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>
+                    </div>
+                    <div class="product-meta">
+                        <span>${item.category || 'Food & Drink'}</span>
+                        <strong>${formatCurrency(item.selling_price)}</strong>
+                    </div>
                 </div>
             `).join('');
         }
 
-        document.getElementById('itemSearch').oninput = (e) => {
-            const query = e.target.value.toLowerCase();
-            renderMenu(inventory.filter(i => i.name.toLowerCase().includes(query)));
-        };
+        document.getElementById('itemSearch').oninput = () => renderMenu(getFilteredItems());
 
         function addToCart(id) {
             const item = inventory.find(i => i.id === id);
             const cartItem = cart.find(c => c.id === id);
-            
             if (cartItem) {
                 cartItem.quantity++;
             } else {
@@ -134,7 +167,7 @@
         function renderCart() {
             const cartList = document.getElementById('cartItems');
             if (cart.length === 0) {
-                cartList.innerHTML = '<p style="color: var(--text-gray); text-align: center;">No items selected</p>';
+                cartList.innerHTML = '<p style="color: rgba(255,255,255,0.75); text-align: center;">No items selected</p>';
                 document.getElementById('orderTotal').textContent = 'KES 0';
                 document.getElementById('checkoutBtn').disabled = true;
                 return;
@@ -144,10 +177,10 @@
             cartList.innerHTML = cart.map((item, index) => {
                 total += item.selling_price * item.quantity;
                 return `
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 5px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.05); padding: 0.9rem; border-radius: 0.85rem;">
                         <div>
                             <p>${item.name}</p>
-                            <small>${formatCurrency(item.selling_price)} x ${item.quantity}</small>
+                            <small style="color: rgba(255,255,255,0.75);">${formatCurrency(item.selling_price)} x ${item.quantity}</small>
                         </div>
                         <button onclick="removeFromCart(${index})" style="background: none; border: none; color: var(--accent-danger); cursor: pointer;"><i class="fas fa-trash"></i></button>
                     </div>
@@ -194,9 +227,8 @@
         document.getElementById('processPaymentBtn').onclick = async () => {
             const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
             const customerName = document.getElementById('custName').value.trim();
-            
+
             try {
-                // 1. Create Order
                 const orderResp = await apiFetch('/orders', {
                     method: 'POST',
                     body: JSON.stringify({ items: cart, total_amount: total, customer_name: customerName })
@@ -204,14 +236,12 @@
 
                 if (currentMethod === 'mpesa') {
                     const phone = document.getElementById('custPhone').value;
-                    // 2. Initiate STK Push
                     await apiFetch('/payments/stk-push', {
                         method: 'POST',
                         body: JSON.stringify({ orderId: orderResp.orderId, phoneNumber: phone, amount: total, customer_name: customerName })
                     });
                     alert('STK Push sent to customer phone. Please check status in Orders page.');
                 } else {
-                    // 2. Process Cash
                     await apiFetch('/payments/cash', {
                         method: 'POST',
                         body: JSON.stringify({ orderId: orderResp.orderId, amount: total })
@@ -222,8 +252,10 @@
                 cart = [];
                 renderCart();
                 document.getElementById('checkoutModal').style.display = 'none';
-                loadMenu(); // Refresh stock
-            } catch (err) { alert(err.message); }
+                loadMenu();
+            } catch (err) {
+                alert(err.message);
+            }
         };
 
         loadMenu();

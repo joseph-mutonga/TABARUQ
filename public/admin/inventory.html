@@ -34,6 +34,7 @@
                 <li><a href="inventory.html" class="active"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
@@ -41,7 +42,7 @@
 
         <main class="container">
             <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1>Inventory Management</h1>
+                <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Inventory Management</h1>
                 <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add New Item</button>
             </header>
 
@@ -114,7 +115,7 @@
     <!-- Restock Modal -->
     <div id="restockModal" class="modal">
         <div class="modal-content">
-            <h2>Restock Item</h2>
+            <h2 style="color: #ffffff; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Restock Item</h2>
             <form id="restockForm">
                 <input type="hidden" id="restockItemId">
                 <div class="form-group">
@@ -133,7 +134,7 @@
                     </select>
                 </div>
                 <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                    <button type="button" class="btn" style="background: var(--text-gray);" onclick="document.getElementById('restockModal').style.display='none'">Cancel</button>
+                    <button type="button" class="btn" style="background: #64748b; color: white; font-weight: 700;" onclick="document.getElementById('restockModal').style.display='none'">Cancel</button>
                     <button type="submit" class="btn btn-success" style="background: var(--accent-success); color: white;">Update Stock</button>
                 </div>
             </form>
@@ -264,7 +265,18 @@
             }
         };
 
+        function openModalIfRequested() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('newItem') === 'true') {
+                openModal();
+            }
+        }
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+
         loadInventory();
+        openModalIfRequested();
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
     </script>
 </body>

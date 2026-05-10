@@ -19,6 +19,7 @@
                 <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html" class="active"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
                 <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
@@ -26,7 +27,7 @@
         </aside>
 
         <main class="container">
-            <h1>Business Reports</h1>
+            <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Business Reports</h1>
             
             <div class="glass-card" style="margin-bottom: 2rem;">
                 <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
@@ -51,15 +52,15 @@
 
             <div class="stats-grid">
                 <div class="glass-card stat-card">
-                    <p style="color: var(--text-gray);">Period Sales</p>
+                    <p style="color: rgba(255,255,255,0.75);">Period Sales</p>
                     <div class="stat-value" id="pSales">KES 0</div>
                 </div>
                 <div class="glass-card stat-card">
-                    <p style="color: var(--text-gray);">Period Expenses</p>
+                    <p style="color: rgba(255,255,255,0.75);">Period Expenses</p>
                     <div class="stat-value" id="pExpenses" style="color: var(--accent-danger);">KES 0</div>
                 </div>
                 <div class="glass-card stat-card">
-                    <p style="color: var(--text-gray);">Net Profit</p>
+                    <p style="color: rgba(255,255,255,0.75);">Net Profit</p>
                     <div class="stat-value" id="pProfit" style="color: var(--accent-success);">KES 0</div>
                 </div>
             </div>
@@ -67,7 +68,7 @@
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; margin-top: 2rem;">
                 <div class="glass-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3>Daily Sales Breakdown</h3>
+                        <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Daily Sales Breakdown</h3>
                         <button class="btn" style="background: var(--accent-success); padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="exportCSV('salesReportTable')"><i class="fas fa-file-csv"></i> Export CSV</button>
                     </div>
                     <div class="table-container">
@@ -85,7 +86,7 @@
                 </div>
 
                 <div class="glass-card">
-                    <h3>Top Selling Items</h3>
+                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Top Selling Items</h3>
                     <div class="table-container">
                         <table>
                             <thead>
@@ -102,7 +103,7 @@
 
             <div class="glass-card" style="margin-top: 2rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3>Detailed Transaction History</h3>
+                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Detailed Transaction History</h3>
                     <button class="btn" style="background: var(--accent-success); padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="exportCSV('transactionHistoryBody')"><i class="fas fa-file-csv"></i> Export CSV</button>
                 </div>
                 <div class="table-container">
@@ -238,6 +239,9 @@
             downloadLink.click();
             document.body.removeChild(downloadLink);
         }
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || user.role !== 'admin') window.location.href = '../index.html';
 
         generateReports();
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };

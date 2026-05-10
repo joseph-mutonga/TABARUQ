@@ -14,62 +14,169 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html" class="active"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
-                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
                 <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
 
         <main class="container">
             <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1>Admin Dashboard</h1>
-                <div id="userInfo"></div>
+                <div>
+                    <h1 style="color: #ffffff; font-weight: 800;">Hotel POS Dashboard</h1>
+                    <p class="card-small" style="color: rgba(255,255,255,0.85); font-weight: 500;">Fast access to food & drink sales, inventory, suppliers, and restaurant analytics.</p>
+                </div>
+                <div id="userInfo" style="color: #ffffff; font-weight: 600;"></div>
             </header>
 
-            <div class="stats-grid">
-                <div class="glass-card stat-card">
-                    <p style="color: var(--text-gray);">Today's Sales</p>
-                    <div class="stat-value" id="todaySales">KES 0</div>
+            <div class="overview-grid">
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-users"></i><span>All Users</span></div>
+                    <div class="card-value" id="allUsers">0</div>
                 </div>
-                <div class="glass-card stat-card">
-                    <p style="color: var(--text-gray);">Today's Expenses</p>
-                    <div class="stat-value" id="todayExpenses" style="color: var(--accent-danger);">KES 0</div>
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-sms"></i><span>SMS (Outbox)</span></div>
+                    <div class="card-value" id="smsOutbox">0</div>
                 </div>
-                <div class="glass-card stat-card">
-                    <p style="color: var(--text-gray);">Daily Profit</p>
-                    <div class="stat-value" id="todayProfit" style="color: var(--accent-success);">KES 0</div>
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-comments-dollar"></i><span>Supplier Balances</span></div>
+                    <div class="card-value" id="supplierBalances">KES 0</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-store"></i><span>Stores</span></div>
+                    <div class="card-value" id="stores">0</div>
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; margin-top: 2rem;">
-                <div class="glass-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3>Recent Transactions</h3>
-                        <a href="reports.html" class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; background: var(--glass);">View All</a>
+            <div class="overview-grid">
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-chart-line"></i><span>Today's Sales</span></div>
+                    <div class="card-value" id="todaySales">KES 0</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-wallet"></i><span>Today's Expenses</span></div>
+                    <div class="card-value" id="todayExpenses">KES 0</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-money-bill-wave"></i><span>Daily Profit</span></div>
+                    <div class="card-value" id="todayProfit">KES 0</div>
+                </div>
+            </div>
+
+            <div class="quick-actions glass-card">
+                <button class="quick-action-button" onclick="navigateTo('inventory.html?newItem=true')"><i class="fas fa-box-open"></i> New Item</button>
+                <button class="quick-action-button" onclick="navigateTo('inventory.html')"><i class="fas fa-warehouse"></i> Inventory</button>
+                <button class="quick-action-button" onclick="navigateTo('reports.html')"><i class="fas fa-chart-line"></i> Reports</button>
+                <button class="quick-action-button" onclick="navigateTo('users.html')"><i class="fas fa-users"></i> Users</button>
+                <button class="quick-action-button" onclick="navigateTo('customers.html')"><i class="fas fa-user-friends"></i> Customers</button>
+                <button class="quick-action-button" onclick="navigateTo('../cashier/index.html')"><i class="fas fa-cash-register"></i> POS</button>
+                <button class="quick-action-button" onclick="navigateTo('../cashier/orders.html')"><i class="fas fa-check-double"></i> Confirm Payments</button>
+                <button class="quick-action-button" onclick="navigateTo('inventory.html')"><i class="fas fa-truck"></i> Supplier Stock</button>
+            </div>
+
+            <div class="sections-grid">
+                <a class="section-card" href="inventory.html?newItem=true">
+                    <span class="section-title">Add New Menu Item</span>
+                    <span class="section-desc">Add a food or drink product directly to inventory for sales.</span>
+                </a>
+                <a class="section-card" href="inventory.html">
+                    <span class="section-title">View Inventory</span>
+                    <span class="section-desc">Check stock, edit product pricing, and restock your kitchen supplies.</span>
+                </a>
+                <a class="section-card" href="reports.html">
+                    <span class="section-title">Sales & Reports</span>
+                    <span class="section-desc">View revenue, profit, item performance, and transaction history.</span>
+                </a>
+                <a class="section-card" href="users.html">
+                    <span class="section-title">Manage Staff</span>
+                    <span class="section-desc">Create or remove cashier and admin accounts for your hotel POS team.</span>
+                </a>
+                <a class="section-card" href="../cashier/index.html">
+                    <span class="section-title">Open POS</span>
+                    <span class="section-desc">Take new food and drink orders with cash or M-Pesa checkout.</span>
+                </a>
+                <a class="section-card" href="../cashier/orders.html">
+                    <span class="section-title">Confirm Payments</span>
+                    <span class="section-desc">Review pending M-Pesa transactions and complete customer orders.</span>
+                </a>
+            </div>
+
+            <div class="dashboard-grid">
+                <section class="notifications-panel">
+                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Notifications</h3>
+                    <div class="notification-item">
+                        <span>Due Invoices</span>
+                        <strong id="dueInvoices">0</strong>
+                    </div>
+                    <div class="notification-item">
+                        <span>Items Count</span>
+                        <strong id="itemsCount">0</strong>
+                    </div>
+                    <div class="notification-item">
+                        <span>Items Need Restocking</span>
+                        <strong id="itemsNeedsRestocking">0</strong>
+                    </div>
+                    <div class="notification-item">
+                        <span>Open Sales</span>
+                        <strong id="openSales">0</strong>
+                    </div>
+                </section>
+
+                <section class="top-products-panel">
+                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Top 15 Fast Moving Products</h3>
+                    <div id="topProducts"></div>
+                </section>
+
+                <section class="account-report-panel">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Account Report</h3>
+                            <p class="card-small">Latest account balances for cash and paybill activity.</p>
+                        </div>
+                        <span class="badge" style="background: var(--accent-success);">Dec 2023</span>
                     </div>
                     <div class="table-container">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Order ID</th>
-                                    <th>Customer</th>
-                                    <th>Cashier</th>
-                                    <th>Amount</th>
-                                    <th>Method</th>
-                                    <th>Status</th>
-                                    <th>Payment</th>
-                                    <th>Date</th>
+                                    <th>Account</th>
+                                    <th>Code</th>
+                                    <th>IN</th>
+                                    <th>OUT</th>
+                                    <th>Bal</th>
                                 </tr>
                             </thead>
-                            <tbody id="recentOrdersBody">
-                                <!-- Data populated here -->
-                            </tbody>
+                            <tbody id="accountReportBody"></tbody>
                         </table>
                     </div>
+                </section>
+            </div>
+
+            <div class="glass-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="color: #ffffff; font-weight: 800;">Recent Transactions</h3>
+                    <a href="reports.html" class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; background: var(--glass);">View Full Sales</a>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Cashier</th>
+                                <th>Amount</th>
+                                <th>Method</th>
+                                <th>Status</th>
+                                <th>Payment</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentOrdersBody"></tbody>
+                    </table>
                 </div>
             </div>
         </main>
@@ -79,21 +186,56 @@
     <script>
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user || user.role !== 'admin') window.location.href = '../index.html';
-        
         document.getElementById('userInfo').textContent = `Welcome, ${user.username}`;
         document.getElementById('logoutBtn').onclick = () => {
             localStorage.clear();
             window.location.href = '../index.html';
         };
 
+        function navigateTo(path) {
+            window.location.href = path;
+        }
+
+        function showComingSoon(feature) {
+            alert(`${feature} module will be added soon for the full hotel POS experience.`);
+        }
+
         async function loadStats() {
             try {
                 const response = await apiFetch('/dashboard/stats');
                 const data = response.data;
-                
+
+                document.getElementById('allUsers').textContent = data.allUsers;
+                document.getElementById('smsOutbox').textContent = data.smsOutbox;
+                document.getElementById('supplierBalances').textContent = formatCurrency(data.supplierBalances);
+                document.getElementById('stores').textContent = data.stores;
+                document.getElementById('dueInvoices').textContent = data.dueInvoices;
+                document.getElementById('itemsCount').textContent = data.itemsCount;
+                document.getElementById('itemsNeedsRestocking').textContent = data.itemsNeedsRestocking;
+                document.getElementById('openSales').textContent = data.openSales;
                 document.getElementById('todaySales').textContent = formatCurrency(data.todaySales);
                 document.getElementById('todayExpenses').textContent = formatCurrency(data.todayExpenses);
                 document.getElementById('todayProfit').textContent = formatCurrency(data.todaySales - data.todayExpenses);
+
+                document.getElementById('topProducts').innerHTML = data.topProducts.map((item, index) => `
+                    <div class="product-item">
+                        <div>
+                            <strong>${index + 1}. ${item.name}</strong>
+                            <div class="card-small">Sold: ${item.sold}</div>
+                        </div>
+                        <div>${formatCurrency(item.revenue)}</div>
+                    </div>
+                `).join('');
+
+                document.getElementById('accountReportBody').innerHTML = data.accountReport.map(account => `
+                    <tr>
+                        <td>${account.account}</td>
+                        <td>${account.code}</td>
+                        <td>${formatCurrency(account.in)}</td>
+                        <td>${formatCurrency(account.out)}</td>
+                        <td>${formatCurrency(account.bal)}</td>
+                    </tr>
+                `).join('');
 
                 const ordersTable = document.getElementById('recentOrdersBody');
                 ordersTable.innerHTML = data.recentOrders.map(o => `

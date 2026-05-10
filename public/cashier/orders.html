@@ -21,8 +21,8 @@
         </aside>
 
         <main class="container">
-            <h1>Recent Orders & Payments</h1>
-            <p style="color: var(--text-gray); margin-bottom: 2rem;">Confirm customer payments here once verified</p>
+            <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Recent Orders & Payments</h1>
+            <p style="color: #ffffff; margin-bottom: 2rem; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Confirm customer payments here once verified</p>
 
             <div class="glass-card">
                 <div class="table-container">
@@ -62,7 +62,7 @@
                         <td>${formatCurrency(p.amount)}</td>
                         <td><span class="badge" style="background: ${p.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'};">${p.payment_method}</span></td>
                         <td>${p.phone_number || '-'}</td>
-                        <td>${p.transaction_id || (p.payment_method === 'Cash' ? 'N/A' : '<span style="color:var(--text-gray)">Waiting...</span>')}</td>
+                        <td>${p.transaction_id || (p.payment_method === 'Cash' ? 'N/A' : '<span style="color: rgba(255,255,255,0.75)">Waiting...</span>')}</td>
                         <td><span style="color: ${p.status === 'confirmed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${p.status}</span></td>
                         <td>
                             ${p.status === 'pending' && p.transaction_id ? 
