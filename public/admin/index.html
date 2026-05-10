@@ -107,32 +107,58 @@
 
             <div class="dashboard-grid">
                 <section class="notifications-panel">
-                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Notifications</h3>
-                    <div class="notification-item">
-                        <span>Due Invoices</span>
-                        <strong id="dueInvoices">0</strong>
+                    <div class="panel-header">
+                        <div>
+                            <h3>Notifications</h3>
+                            <p class="card-small">Important operational alerts and stock reminders.</p>
+                        </div>
+                        <span class="badge badge-info">Live</span>
                     </div>
-                    <div class="notification-item">
-                        <span>Items Count</span>
-                        <strong id="itemsCount">0</strong>
-                    </div>
-                    <div class="notification-item">
-                        <span>Items Need Restocking</span>
-                        <strong id="itemsNeedsRestocking">0</strong>
-                    </div>
-                    <div class="notification-item">
-                        <span>Open Sales</span>
-                        <strong id="openSales">0</strong>
+                    <div class="notifications-grid">
+                        <div class="notification-card notification-card-warning">
+                            <div class="notice-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                            <div>
+                                <span>Due Invoices</span>
+                                <strong id="dueInvoices">0</strong>
+                            </div>
+                        </div>
+                        <div class="notification-card notification-card-primary">
+                            <div class="notice-icon"><i class="fas fa-boxes"></i></div>
+                            <div>
+                                <span>Items Count</span>
+                                <strong id="itemsCount">0</strong>
+                            </div>
+                        </div>
+                        <div class="notification-card notification-card-danger">
+                            <div class="notice-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                            <div>
+                                <span>Items Need Restocking</span>
+                                <strong id="itemsNeedsRestocking">0</strong>
+                            </div>
+                        </div>
+                        <div class="notification-card notification-card-success">
+                            <div class="notice-icon"><i class="fas fa-chart-line"></i></div>
+                            <div>
+                                <span>Open Sales</span>
+                                <strong id="openSales">0</strong>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
                 <section class="top-products-panel">
-                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Top 15 Fast Moving Products</h3>
-                    <div id="topProducts"></div>
+                    <div class="panel-header">
+                        <div>
+                            <h3>Top 15 Fast Moving Products</h3>
+                            <p class="card-small">Track the highest-selling items and the revenue they generate.</p>
+                        </div>
+                        <span class="badge badge-info">Top Sellers</span>
+                    </div>
+                    <div id="topProducts" class="products-grid"></div>
                 </section>
 
                 <section class="account-report-panel">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div class="panel-header" style="margin-bottom: 1rem;">
                         <div>
                             <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Account Report</h3>
                             <p class="card-small">Latest account balances for cash and paybill activity.</p>
@@ -218,13 +244,16 @@
                 document.getElementById('todayProfit').textContent = formatCurrency(data.todaySales - data.todayExpenses);
 
                 document.getElementById('topProducts').innerHTML = data.topProducts.map((item, index) => `
-                    <div class="product-item">
-                        <div>
-                            <strong>${index + 1}. ${item.name}</strong>
-                            <div class="card-small">Sold: ${item.sold}</div>
+                    <article class="product-card">
+                        <div class="product-card-header">
+                            <span class="product-rank">#${index + 1}</span>
+                            <strong>${item.name}</strong>
                         </div>
-                        <div>${formatCurrency(item.revenue)}</div>
-                    </div>
+                        <div class="product-meta">
+                            <span>Sold: ${item.sold}</span>
+                            <span>${formatCurrency(item.revenue)}</span>
+                        </div>
+                    </article>
                 `).join('');
 
                 document.getElementById('accountReportBody').innerHTML = data.accountReport.map(account => `
