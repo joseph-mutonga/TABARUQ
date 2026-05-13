@@ -63,16 +63,20 @@
             </div>
             <div class="form-group">
                 <label>Payment Method</label>
-                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-                    <button class="btn" id="mpesaTab" style="flex:1; background: var(--accent-success);" onclick="setPaymentMethod('mpesa')">M-Pesa</button>
-                    <button class="btn" id="cashTab" style="flex:1; background: var(--card-bg);" onclick="setPaymentMethod('cash')">Cash</button>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                    <button type="button" class="btn" id="mpesaStkTab" style="flex:1; min-width: 7rem; background: var(--accent-success);" onclick="setPaymentMethod('mpesa_stk')">M-Pesa STK</button>
+                    <button type="button" class="btn" id="mpesaOfflineTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('mpesa_offline')">M-Pesa offline</button>
+                    <button type="button" class="btn" id="cashTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('cash')">Cash</button>
                 </div>
             </div>
-            <div id="mpesaFields">
+            <div id="mpesaStkFields">
                 <div class="form-group">
                     <label>Customer Phone (M-Pesa)</label>
                     <input type="text" id="custPhone" class="form-control" placeholder="2547XXXXXXXX" value="2547">
                 </div>
+            </div>
+            <div id="mpesaOfflineFields" style="display:none;">
+                <p class="card-small" style="color: rgba(255,255,255,0.9); margin-bottom: 1rem;">Customer pays your Pay Bill or Till in their M-Pesa menu (no pop-up on their phone). After you tap Complete, pick the matching unlinked M-Pesa message or enter the receipt in the next step.</p>
             </div>
             <div id="cashFields" style="display:none;">
                 <p style="color: var(--accent-success); margin-bottom: 1rem;"><i class="fas fa-check-circle"></i> Cash sales are recorded immediately.</p>
@@ -83,6 +87,42 @@
             </div>
         </div>
     </div>
+
+    <div id="incomingMpesaModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1200; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:560px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
+            <h2 style="color:#fff; margin-bottom:0.5rem; font-size:1.15rem;">Record offline M-Pesa</h2>
+            <p id="incomingMpesaOrderHint" class="card-small" style="color:rgba(255,255,255,0.88); margin-bottom:1rem;"></p>
+            <p class="card-small" style="color:rgba(255,255,255,0.85); margin-bottom:0.75rem;">Pick the payment that matches this new order. Rows stay until the server confirms the link.</p>
+            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+                <button type="button" class="btn" style="background:#334155; color:#fff;" onclick="refreshIncomingList()"><i class="fas fa-sync-alt"></i> Refresh list</button>
+                <button type="button" class="btn" style="background:#475569; color:#fff;" onclick="toggleIncomingManual()">Enter receipt manually</button>
+            </div>
+            <div id="incomingMpesaList" style="margin-bottom:1rem; min-height:3rem;"></div>
+            <div id="incomingManualWrap" style="display:none; border-top:1px solid rgba(255,255,255,0.12); padding-top:1rem; margin-bottom:1rem;">
+                <p class="card-small" style="color:rgba(255,255,255,0.88); margin-bottom:0.75rem;">If the payment is not listed, enter the confirmation code from the customer&apos;s SMS.</p>
+                <div class="form-group">
+                    <label style="color:#fff;">M-Pesa confirmation code</label>
+                    <input type="text" id="incomingManualReceipt" class="form-control" placeholder="e.g. QGH1ABCD23" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label style="color:#fff;">Payer phone (optional)</label>
+                    <input type="text" id="incomingManualPhone" class="form-control" placeholder="2547XXXXXXXX">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="submitIncomingManual()">Record with receipt code</button>
+            </div>
+            <p id="incomingMpesaError" style="color:var(--accent-danger); margin-bottom:0.75rem; font-size:0.9rem;"></p>
+            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:flex-end;">
+                <button type="button" class="btn" style="background:#64748b; color:#fff;" onclick="closeIncomingMpesaModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="incomingApplyBtn" disabled onclick="confirmApplyIncoming()">Link selected &amp; complete order</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .incoming-row { cursor: pointer; border-radius: 0.75rem; padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; background: rgba(255,255,255,0.06); border: 2px solid transparent; transition: background 0.15s, border-color 0.15s; }
+        .incoming-row:hover { background: rgba(255,255,255,0.1); }
+        .incoming-row--sel { border-color: rgba(52, 211, 153, 0.9); background: rgba(16, 185, 129, 0.14); }
+    </style>
 
     <script src="../js/api.js"></script>
     <script>
@@ -96,6 +136,8 @@
 
         if (user.role === 'admin') {
             document.getElementById('adminNavLink').style.display = 'block';
+        }
+        if (user.role === 'admin' || user.role === 'cashier') {
             document.getElementById('ordersNavLink').style.display = 'block';
         }
 
@@ -197,30 +239,204 @@
         }
 
         document.getElementById('checkoutBtn').onclick = () => {
+            setPaymentMethod('mpesa_stk');
             document.getElementById('checkoutModal').style.display = 'flex';
         };
 
-        let currentMethod = 'mpesa';
+        let currentMethod = 'mpesa_stk';
 
         function setPaymentMethod(method) {
             currentMethod = method;
-            const mpesaTab = document.getElementById('mpesaTab');
+            const stkTab = document.getElementById('mpesaStkTab');
+            const offTab = document.getElementById('mpesaOfflineTab');
             const cashTab = document.getElementById('cashTab');
-            const mpesaFields = document.getElementById('mpesaFields');
+            const stkFields = document.getElementById('mpesaStkFields');
+            const offFields = document.getElementById('mpesaOfflineFields');
             const cashFields = document.getElementById('cashFields');
+            const btn = document.getElementById('processPaymentBtn');
 
-            if (method === 'mpesa') {
-                mpesaTab.style.background = 'var(--accent-success)';
-                cashTab.style.background = 'var(--card-bg)';
-                mpesaFields.style.display = 'block';
-                cashFields.style.display = 'none';
-                document.getElementById('processPaymentBtn').textContent = 'Push STK';
+            stkTab.style.background = 'var(--card-bg)';
+            offTab.style.background = 'var(--card-bg)';
+            cashTab.style.background = 'var(--card-bg)';
+            stkFields.style.display = 'none';
+            offFields.style.display = 'none';
+            cashFields.style.display = 'none';
+
+            if (method === 'mpesa_stk') {
+                stkTab.style.background = 'var(--accent-success)';
+                stkFields.style.display = 'block';
+                btn.textContent = 'Push STK';
+            } else if (method === 'mpesa_offline') {
+                offTab.style.background = 'var(--accent-success)';
+                offFields.style.display = 'block';
+                btn.textContent = 'Record offline M-Pesa & complete';
             } else {
-                mpesaTab.style.background = 'var(--card-bg)';
                 cashTab.style.background = 'var(--accent-success)';
-                mpesaFields.style.display = 'none';
                 cashFields.style.display = 'block';
-                document.getElementById('processPaymentBtn').textContent = 'Complete Cash Sale';
+                btn.textContent = 'Complete Cash Sale';
+            }
+        }
+
+        let __incomingModalOpen = false;
+        let __incomingFromCheckout = false;
+        let __incomingOrderId = null;
+        let __incomingOrderTotal = null;
+        let __incomingCustomerName = '';
+        let __incomingSelectedId = null;
+        let __incomingList = [];
+
+        document.getElementById('incomingMpesaModal').addEventListener('click', (e) => {
+            if (e.target.id === 'incomingMpesaModal') closeIncomingMpesaModal();
+        });
+
+        function closeIncomingMpesaModal(options = {}) {
+            const oid = __incomingOrderId;
+            const fromCh = __incomingFromCheckout;
+            if (fromCh && oid && !options.success) {
+                alert(
+                    `Order #${oid} was created but not yet paid. Open Orders & Payments to link M-Pesa or record the receipt there.`
+                );
+                cart = [];
+                renderCart();
+            }
+            __incomingModalOpen = false;
+            __incomingFromCheckout = false;
+            __incomingOrderId = null;
+            __incomingOrderTotal = null;
+            __incomingCustomerName = '';
+            __incomingSelectedId = null;
+            __incomingList = [];
+            document.getElementById('incomingMpesaModal').style.display = 'none';
+            document.getElementById('incomingManualReceipt').value = '';
+            document.getElementById('incomingManualPhone').value = '';
+            document.getElementById('incomingManualWrap').style.display = 'none';
+            document.getElementById('incomingMpesaError').textContent = '';
+            document.getElementById('incomingApplyBtn').disabled = true;
+        }
+
+        function openIncomingMpesaModal(orderId, orderTotal, customerName, opts = {}) {
+            __incomingModalOpen = true;
+            __incomingFromCheckout = !!opts.fromCheckout;
+            __incomingOrderId = Number(orderId);
+            __incomingOrderTotal = Number(orderTotal);
+            __incomingCustomerName = customerName != null ? String(customerName).trim() : '';
+            __incomingSelectedId = null;
+            document.getElementById('incomingMpesaError').textContent = '';
+            document.getElementById('incomingManualWrap').style.display = 'none';
+            document.getElementById('incomingManualReceipt').value = '';
+            document.getElementById('incomingManualPhone').value = '';
+            document.getElementById('incomingMpesaOrderHint').textContent = `Order #${__incomingOrderId} · expected total ${formatCurrency(__incomingOrderTotal)}`;
+            document.getElementById('incomingApplyBtn').disabled = true;
+            document.getElementById('checkoutModal').style.display = 'none';
+            document.getElementById('incomingMpesaModal').style.display = 'flex';
+            refreshIncomingList();
+        }
+
+        function finishCheckoutAfterIncoming() {
+            cart = [];
+            renderCart();
+            closeIncomingMpesaModal({ success: true });
+            loadMenu();
+            alert('Order completed.');
+        }
+
+        function toggleIncomingManual() {
+            const w = document.getElementById('incomingManualWrap');
+            w.style.display = w.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function renderIncomingList() {
+            const listEl = document.getElementById('incomingMpesaList');
+            function esc(s) {
+                const d = document.createElement('div');
+                d.textContent = s == null ? '' : String(s);
+                return d.innerHTML;
+            }
+            if (!__incomingList.length) {
+                listEl.innerHTML =
+                    '<p class="card-small" style="color:rgba(255,255,255,0.8);">No unlinked M-Pesa messages yet. Use Refresh after a callback, or enter the receipt manually below.</p>';
+                return;
+            }
+            listEl.innerHTML = __incomingList
+                .map((p) => {
+                    const t = p.confirmed_at || p.created_at;
+                    const timeStr = t ? new Date(t).toLocaleString() : '—';
+                    const msg = p.mpesa_result_message ? String(p.mpesa_result_message) : '';
+                    const msgShort = msg.length > 100 ? msg.slice(0, 100) + '…' : msg;
+                    const sel = Number(p.id) === __incomingSelectedId ? ' incoming-row--sel' : '';
+                    return `<div class="incoming-row${sel}" role="button" tabindex="0" data-incoming-id="${p.id}" onclick="selectIncomingRow(${p.id})">
+                        <div style="display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap;">
+                            <strong style="color:#fff;">${formatCurrency(p.amount)}</strong>
+                            <span style="color:rgba(255,255,255,0.75); font-size:0.85rem;">${esc(timeStr)}</span>
+                        </div>
+                        <div style="color:rgba(255,255,255,0.9); font-size:0.9rem; margin-top:0.35rem;">${esc(p.customer_name || '—')} · receipt: <strong>${esc(p.transaction_id || '—')}</strong></div>
+                        <div style="color:rgba(255,255,255,0.75); font-size:0.82rem; margin-top:0.35rem; word-break:break-word;">${esc(msgShort)}</div>
+                        <div style="margin-top:0.35rem;"><span class="badge" style="background:var(--accent-success);">${esc(p.payment_method || 'M-Pesa')}</span> <span class="badge" style="background:var(--accent-warning);">${esc(p.status)}</span></div>
+                    </div>`;
+                })
+                .join('');
+        }
+
+        function selectIncomingRow(id) {
+            __incomingSelectedId = Number(id);
+            document.getElementById('incomingApplyBtn').disabled = !__incomingSelectedId;
+            document.getElementById('incomingMpesaError').textContent = '';
+            renderIncomingList();
+        }
+
+        async function refreshIncomingList() {
+            const listEl = document.getElementById('incomingMpesaList');
+            document.getElementById('incomingMpesaError').textContent = '';
+            listEl.innerHTML = '<p class="card-small" style="color:rgba(255,255,255,0.85);">Loading…</p>';
+            try {
+                const r = await apiFetch('/payments/unlinked-incoming');
+                __incomingList = r.data || [];
+                renderIncomingList();
+            } catch (err) {
+                listEl.innerHTML = '';
+                document.getElementById('incomingMpesaError').textContent = err.message || 'Failed to load list';
+            }
+        }
+
+        async function confirmApplyIncoming() {
+            if (!__incomingSelectedId || !__incomingOrderId) return;
+            document.getElementById('incomingMpesaError').textContent = '';
+            const btn = document.getElementById('incomingApplyBtn');
+            btn.disabled = true;
+            try {
+                await apiFetch('/payments/apply-incoming-to-order', {
+                    method: 'POST',
+                    body: JSON.stringify({ paymentId: __incomingSelectedId, orderId: __incomingOrderId }),
+                });
+                finishCheckoutAfterIncoming();
+            } catch (err) {
+                document.getElementById('incomingMpesaError').textContent = err.message || 'Apply failed';
+                btn.disabled = !__incomingSelectedId;
+            }
+        }
+
+        async function submitIncomingManual() {
+            const receipt = document.getElementById('incomingManualReceipt').value.trim();
+            if (!receipt) {
+                document.getElementById('incomingMpesaError').textContent = 'Enter the M-Pesa confirmation code.';
+                return;
+            }
+            const phone = document.getElementById('incomingManualPhone').value.trim();
+            document.getElementById('incomingMpesaError').textContent = '';
+            try {
+                await apiFetch('/payments/offline-mpesa', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        orderId: __incomingOrderId,
+                        amount: __incomingOrderTotal,
+                        transaction_id: receipt,
+                        phone_number: phone || undefined,
+                        customer_name: __incomingCustomerName || undefined,
+                    }),
+                });
+                finishCheckoutAfterIncoming();
+            } catch (err) {
+                document.getElementById('incomingMpesaError').textContent = err.message || 'Recording failed';
             }
         }
 
@@ -234,30 +450,36 @@
                     body: JSON.stringify({ items: cart, total_amount: total, customer_name: customerName })
                 });
 
-                if (currentMethod === 'mpesa') {
+                if (currentMethod === 'mpesa_stk') {
                     const phone = document.getElementById('custPhone').value;
                     await apiFetch('/payments/stk-push', {
                         method: 'POST',
                         body: JSON.stringify({ orderId: orderResp.orderId, phoneNumber: phone, amount: total, customer_name: customerName })
                     });
-                    alert('STK Push sent to customer phone. Please check status in Orders page.');
+                    alert('STK Push sent to customer phone. You can confirm from Orders if needed, or record offline M-Pesa there if they paid manually instead.');
+                    cart = [];
+                    renderCart();
+                    document.getElementById('checkoutModal').style.display = 'none';
+                    loadMenu();
+                } else if (currentMethod === 'mpesa_offline') {
+                    openIncomingMpesaModal(orderResp.orderId, total, customerName, { fromCheckout: true });
                 } else {
                     await apiFetch('/payments/cash', {
                         method: 'POST',
                         body: JSON.stringify({ orderId: orderResp.orderId, amount: total })
                     });
                     alert('Cash payment recorded. Order completed.');
+                    cart = [];
+                    renderCart();
+                    document.getElementById('checkoutModal').style.display = 'none';
+                    loadMenu();
                 }
-
-                cart = [];
-                renderCart();
-                document.getElementById('checkoutModal').style.display = 'none';
-                loadMenu();
             } catch (err) {
                 alert(err.message);
             }
         };
 
+        setPaymentMethod('mpesa_stk');
         loadMenu();
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
     </script>

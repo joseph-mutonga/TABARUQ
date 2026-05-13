@@ -42,12 +42,12 @@ A complete premium Hotel Management System built with Node.js, Express, MySQL, a
    - `MPESA_PASSKEY`
    - `MPESA_CALLBACK_URL` (Use a service like Ngrok for local testing)
 
-### 4. Installation
+### 5. Installation
 ```bash
 npm install
 ```
 
-### 5. Running the Application
+### 6. Running the Application
 ```bash
 # Production mode
 npm start
@@ -56,6 +56,22 @@ npm start
 npm run dev
 ```
 The server will start on `http://localhost:5000`.
+
+### 7. Testing with Ngrok
+If you want to access the app from another device, use ngrok to expose your local server.
+
+1. Run the tunnel:
+```bash
+npm run ngrok
+```
+2. Copy the public URL shown in the terminal, for example:
+```text
+https://abcd1234.ngrok.io
+```
+3. Open that URL on any device to access the app remotely.
+
+> If you use M-Pesa callbacks, set `MPESA_CALLBACK_URL` in your `.env` to the ngrok URL plus the callback path, for example:
+> `MPESA_CALLBACK_URL=https://abcd1234.ngrok.io/api/payments/callback`
 
 ---
 

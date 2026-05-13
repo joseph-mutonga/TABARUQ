@@ -74,8 +74,24 @@ CREATE TABLE IF NOT EXISTS payments (
     confirmed_at TIMESTAMP,
     confirmed_by INT,
     customer_name VARCHAR(100),
+    mpesa_result_message VARCHAR(512) NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id),
     FOREIGN KEY (confirmed_by) REFERENCES users(id)
+);
+
+-- Raw M-Pesa callback audit (STK + C2B); payment_id set when a payments row is resolved
+CREATE TABLE IF NOT EXISTS mpesa_callbacks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    source VARCHAR(16) NOT NULL,
+    checkout_request_id VARCHAR(100) NULL,
+    raw_body TEXT NOT NULL,
+    parsed_summary VARCHAR(512) NULL,
+    payment_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_mpesa_callbacks_checkout (checkout_request_id),
+    INDEX idx_mpesa_callbacks_payment (payment_id),
+    INDEX idx_mpesa_callbacks_created (created_at),
+    FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL
 );
 
 -- Expenses table

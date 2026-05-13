@@ -8,7 +8,7 @@ const getMpesaToken = async () => {
 
     try {
         const response = await axios.get(
-            'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
+            process.env.MPESA_OAUTH_URL || 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
             {
                 headers: {
                     Authorization: `Basic ${auth}`,

@@ -22,7 +22,8 @@
 
         <main class="container">
             <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Recent Orders & Payments</h1>
-            <p style="color: #ffffff; margin-bottom: 2rem; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Confirm customer payments here once verified</p>
+            <p style="color: #ffffff; margin-bottom: 0.75rem; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">When Safaricom sends an M-Pesa callback, the payer name, amount, and message are saved here. Click a row to view the full callback text. Confirmed STK payments complete the order automatically.</p>
+            <p class="card-small" style="color: rgba(255,255,255,0.85); margin-bottom: 1.5rem;">This list refreshes every few seconds so new callbacks appear without reloading the page.</p>
 
             <div class="glass-card">
                 <div class="table-container">
@@ -36,6 +37,7 @@
                                 <th>Payment Phone</th>
                                 <th>M-Pesa Receipt</th>
                                 <th>Status</th>
+                                <th>Callback / message</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -46,33 +48,338 @@
         </main>
     </div>
 
+    <div id="paymentDetailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:520px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
+            <h2 style="color:#fff; margin-bottom:1rem; font-size:1.15rem;">Payment &amp; M-Pesa callback</h2>
+            <dl id="paymentDetailDl" style="color:rgba(255,255,255,0.92); font-size:0.95rem; line-height:1.6; margin:0;"></dl>
+            <div id="paymentDetailActions" style="margin-top:1.25rem; display:flex; flex-wrap:wrap; gap:0.5rem;"></div>
+            <button type="button" class="btn" style="margin-top:1rem; background:#64748b; color:#fff;" onclick="closePaymentDetail()">Close</button>
+        </div>
+    </div>
+
+    <div id="incomingMpesaModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1100; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:560px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
+            <h2 style="color:#fff; margin-bottom:0.5rem; font-size:1.15rem;">Record offline M-Pesa</h2>
+            <p id="incomingMpesaOrderHint" class="card-small" style="color:rgba(255,255,255,0.88); margin-bottom:1rem;"></p>
+            <p class="card-small" style="color:rgba(255,255,255,0.85); margin-bottom:0.75rem;">Choose an unlinked M-Pesa message that matches this order (newest first). The row stays here until the server confirms the link.</p>
+            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+                <button type="button" class="btn" style="background:#334155; color:#fff;" onclick="refreshIncomingList()"><i class="fas fa-sync-alt"></i> Refresh list</button>
+                <button type="button" class="btn" style="background:#475569; color:#fff;" onclick="toggleIncomingManual()">Enter receipt manually</button>
+            </div>
+            <div id="incomingMpesaList" style="margin-bottom:1rem; min-height:3rem;"></div>
+            <div id="incomingManualWrap" style="display:none; border-top:1px solid rgba(255,255,255,0.12); padding-top:1rem; margin-bottom:1rem;">
+                <p class="card-small" style="color:rgba(255,255,255,0.88); margin-bottom:0.75rem;">If the payment is not in the list, enter the M-Pesa confirmation code from the customer&apos;s SMS.</p>
+                <div class="form-group">
+                    <label style="color:#fff;">M-Pesa confirmation code</label>
+                    <input type="text" id="incomingManualReceipt" class="form-control" placeholder="e.g. QGH1ABCD23" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label style="color:#fff;">Payer phone (optional)</label>
+                    <input type="text" id="incomingManualPhone" class="form-control" placeholder="2547XXXXXXXX">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="submitIncomingManual()">Record with receipt code</button>
+            </div>
+            <p id="incomingMpesaError" style="color:var(--accent-danger); margin-bottom:0.75rem; font-size:0.9rem;"></p>
+            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:flex-end;">
+                <button type="button" class="btn" style="background:#64748b; color:#fff;" onclick="closeIncomingMpesaModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="incomingApplyBtn" disabled onclick="confirmApplyIncoming()">Link selected &amp; complete order</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        tr.payment-row { cursor: pointer; transition: background 0.15s ease; }
+        tr.payment-row:hover { background: rgba(255,255,255,0.06); }
+        tr.payment-row--selected { outline: 2px solid rgba(52, 211, 153, 0.85); outline-offset: -2px; background: rgba(16, 185, 129, 0.12); }
+        .incoming-row { cursor: pointer; border-radius: 0.75rem; padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; background: rgba(255,255,255,0.06); border: 2px solid transparent; transition: background 0.15s, border-color 0.15s; }
+        .incoming-row:hover { background: rgba(255,255,255,0.1); }
+        .incoming-row--sel { border-color: rgba(52, 211, 153, 0.9); background: rgba(16, 185, 129, 0.14); }
+    </style>
     <script src="../js/api.js"></script>
     <script>
+        let __selectedPaymentId = null;
+        let __detailModalOpen = false;
+        let __incomingModalOpen = false;
+        let __incomingOrderId = null;
+        let __incomingOrderTotal = null;
+        let __incomingSelectedId = null;
+        let __incomingList = [];
+
+        function closePaymentDetail() {
+            __detailModalOpen = false;
+            document.getElementById('paymentDetailModal').style.display = 'none';
+        }
+
+        function showPaymentDetail(p) {
+            __detailModalOpen = true;
+            const dl = document.getElementById('paymentDetailDl');
+            const actions = document.getElementById('paymentDetailActions');
+            function esc(s) {
+                const d = document.createElement('div');
+                d.textContent = s == null ? '' : String(s);
+                return d.innerHTML;
+            }
+            const rows = [
+                ['Order', p.order_id ? `#${p.order_id}` : 'Unlinked'],
+                ['Amount (recorded)', formatCurrency(p.amount)],
+                ['Customer / payer name', p.customer_name || '—'],
+                ['Payment phone', p.phone_number || '—'],
+                ['M-Pesa receipt', p.transaction_id || '—'],
+                ['Method', p.payment_method || '—'],
+                ['Status', p.status],
+                ['Confirmed at', p.confirmed_at ? new Date(p.confirmed_at).toLocaleString() : '—'],
+                ['Confirmed by', p.confirmed_by_user || (p.confirmed_by ? `User #${p.confirmed_by}` : '—')],
+                ['Callback / full message', p.mpesa_result_message || '—'],
+            ];
+            dl.innerHTML = rows
+                .map(
+                    ([k, v]) =>
+                        `<div style="margin-bottom:0.75rem"><dt style="font-weight:700;color:rgba(255,255,255,0.75);font-size:0.8rem;text-transform:uppercase;">${esc(
+                            k
+                        )}</dt><dd style="margin:0.25rem 0 0 0;word-break:break-word;">${esc(v)}</dd></div>`
+                )
+                .join('');
+
+            const orderTotal = p.total_amount != null ? Number(p.total_amount) : Number(p.amount);
+            const canOffline =
+                p.order_id &&
+                p.payment_method !== 'Cash' &&
+                p.status !== 'confirmed' &&
+                (p.status === 'failed' || (p.status === 'pending' && !p.transaction_id));
+            let actionHtml = '';
+            if (p.status === 'pending' && p.transaction_id) {
+                actionHtml += `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();closePaymentDetail();confirmPayment(${p.id}, ${
+                    p.order_id || 'null'
+                })">Confirm &amp; complete order</button>`;
+            }
+            if (canOffline) {
+                actionHtml += `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();closePaymentDetail();openIncomingMpesaModal(${p.order_id}, ${orderTotal})">Record offline M-Pesa</button>`;
+            }
+            if (p.status === 'confirmed') {
+                actionHtml +=
+                    '<span style="color:var(--accent-success);align-self:center;"><i class="fas fa-check-circle"></i> Transaction completed and recorded in the database.</span>';
+            }
+            actions.innerHTML = actionHtml;
+
+            document.getElementById('paymentDetailModal').style.display = 'flex';
+        }
+
+        function bindPaymentRowHandlers(payments) {
+            const body = document.getElementById('ordersBody');
+            body.querySelectorAll('tr.payment-row').forEach((tr) => {
+                const id = Number(tr.dataset.paymentId);
+                const p = payments.find((x) => Number(x.id) === id);
+                if (!p) return;
+                tr.onclick = () => {
+                    __selectedPaymentId = id;
+                    body.querySelectorAll('tr.payment-row').forEach((r) => r.classList.remove('payment-row--selected'));
+                    tr.classList.add('payment-row--selected');
+                    showPaymentDetail(p);
+                };
+            });
+        }
+
+        document.getElementById('paymentDetailModal').addEventListener('click', (e) => {
+            if (e.target.id === 'paymentDetailModal') closePaymentDetail();
+        });
+        document.getElementById('incomingMpesaModal').addEventListener('click', (e) => {
+            if (e.target.id === 'incomingMpesaModal') closeIncomingMpesaModal();
+        });
+
+        function closeIncomingMpesaModal() {
+            __incomingModalOpen = false;
+            __incomingOrderId = null;
+            __incomingOrderTotal = null;
+            __incomingSelectedId = null;
+            __incomingList = [];
+            document.getElementById('incomingMpesaModal').style.display = 'none';
+            document.getElementById('incomingManualReceipt').value = '';
+            document.getElementById('incomingManualPhone').value = '';
+            document.getElementById('incomingManualWrap').style.display = 'none';
+            document.getElementById('incomingMpesaError').textContent = '';
+            document.getElementById('incomingApplyBtn').disabled = true;
+        }
+
+        function openIncomingMpesaModal(orderId, orderTotal) {
+            __incomingModalOpen = true;
+            __incomingOrderId = Number(orderId);
+            __incomingOrderTotal = Number(orderTotal);
+            __incomingSelectedId = null;
+            document.getElementById('incomingMpesaError').textContent = '';
+            document.getElementById('incomingManualWrap').style.display = 'none';
+            document.getElementById('incomingManualReceipt').value = '';
+            document.getElementById('incomingManualPhone').value = '';
+            document.getElementById('incomingMpesaOrderHint').textContent = `Order #${__incomingOrderId} · expected total ${formatCurrency(__incomingOrderTotal)}`;
+            document.getElementById('incomingApplyBtn').disabled = true;
+            document.getElementById('incomingMpesaModal').style.display = 'flex';
+            refreshIncomingList();
+        }
+
+        function toggleIncomingManual() {
+            const w = document.getElementById('incomingManualWrap');
+            w.style.display = w.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function renderIncomingList() {
+            const listEl = document.getElementById('incomingMpesaList');
+            function esc(s) {
+                const d = document.createElement('div');
+                d.textContent = s == null ? '' : String(s);
+                return d.innerHTML;
+            }
+            if (!__incomingList.length) {
+                listEl.innerHTML =
+                    '<p class="card-small" style="color:rgba(255,255,255,0.8);">No unlinked M-Pesa messages yet. Use Refresh after a callback, or enter the receipt manually below.</p>';
+                return;
+            }
+            listEl.innerHTML = __incomingList
+                .map((p) => {
+                    const t = p.confirmed_at || p.created_at;
+                    const timeStr = t ? new Date(t).toLocaleString() : '—';
+                    const msg = p.mpesa_result_message ? String(p.mpesa_result_message) : '';
+                    const msgShort = msg.length > 100 ? msg.slice(0, 100) + '…' : msg;
+                    const sel = Number(p.id) === __incomingSelectedId ? ' incoming-row--sel' : '';
+                    return `<div class="incoming-row${sel}" role="button" tabindex="0" data-incoming-id="${p.id}" onclick="selectIncomingRow(${p.id})">
+                        <div style="display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap;">
+                            <strong style="color:#fff;">${formatCurrency(p.amount)}</strong>
+                            <span style="color:rgba(255,255,255,0.75); font-size:0.85rem;">${esc(timeStr)}</span>
+                        </div>
+                        <div style="color:rgba(255,255,255,0.9); font-size:0.9rem; margin-top:0.35rem;">${esc(p.customer_name || '—')} · receipt: <strong>${esc(p.transaction_id || '—')}</strong></div>
+                        <div style="color:rgba(255,255,255,0.75); font-size:0.82rem; margin-top:0.35rem; word-break:break-word;">${esc(msgShort)}</div>
+                        <div style="margin-top:0.35rem;"><span class="badge" style="background:var(--accent-success);">${esc(p.payment_method || 'M-Pesa')}</span> <span class="badge" style="background:var(--accent-warning);">${esc(p.status)}</span></div>
+                    </div>`;
+                })
+                .join('');
+        }
+
+        function selectIncomingRow(id) {
+            __incomingSelectedId = Number(id);
+            document.getElementById('incomingApplyBtn').disabled = !__incomingSelectedId;
+            document.getElementById('incomingMpesaError').textContent = '';
+            renderIncomingList();
+        }
+
+        async function refreshIncomingList() {
+            const listEl = document.getElementById('incomingMpesaList');
+            document.getElementById('incomingMpesaError').textContent = '';
+            listEl.innerHTML = '<p class="card-small" style="color:rgba(255,255,255,0.85);">Loading…</p>';
+            try {
+                const r = await apiFetch('/payments/unlinked-incoming');
+                __incomingList = r.data || [];
+                renderIncomingList();
+            } catch (err) {
+                listEl.innerHTML = '';
+                document.getElementById('incomingMpesaError').textContent = err.message || 'Failed to load list';
+            }
+        }
+
+        async function confirmApplyIncoming() {
+            if (!__incomingSelectedId || !__incomingOrderId) return;
+            document.getElementById('incomingMpesaError').textContent = '';
+            const btn = document.getElementById('incomingApplyBtn');
+            btn.disabled = true;
+            try {
+                await apiFetch('/payments/apply-incoming-to-order', {
+                    method: 'POST',
+                    body: JSON.stringify({ paymentId: __incomingSelectedId, orderId: __incomingOrderId }),
+                });
+                closeIncomingMpesaModal();
+                loadData();
+            } catch (err) {
+                document.getElementById('incomingMpesaError').textContent = err.message || 'Apply failed';
+                btn.disabled = !__incomingSelectedId;
+            }
+        }
+
+        async function submitIncomingManual() {
+            const receipt = document.getElementById('incomingManualReceipt').value.trim();
+            if (!receipt) {
+                document.getElementById('incomingMpesaError').textContent = 'Enter the M-Pesa confirmation code.';
+                return;
+            }
+            const phone = document.getElementById('incomingManualPhone').value.trim();
+            document.getElementById('incomingMpesaError').textContent = '';
+            try {
+                await apiFetch('/payments/offline-mpesa', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        orderId: __incomingOrderId,
+                        amount: __incomingOrderTotal,
+                        transaction_id: receipt,
+                        phone_number: phone || undefined,
+                    }),
+                });
+                closeIncomingMpesaModal();
+                loadData();
+            } catch (err) {
+                document.getElementById('incomingMpesaError').textContent = err.message || 'Recording failed';
+            }
+        }
+
         async function loadData() {
             try {
                 // We'll get payments instead because we need to confirm them
                 const response = await apiFetch('/payments');
                 const payments = response.data;
                 const body = document.getElementById('ordersBody');
+
+                function escapeHtml(s) {
+                    const d = document.createElement('div');
+                    d.textContent = s;
+                    return d.innerHTML;
+                }
                 
-                body.innerHTML = payments.map(p => `
-                    <tr style="${p.status === 'pending' && p.transaction_id ? 'background: rgba(16, 185, 129, 0.05);' : ''}">
+                body.innerHTML = payments
+                    .map(
+                        (p) => `
+                    <tr class="payment-row${Number(p.id) === __selectedPaymentId ? ' payment-row--selected' : ''}" data-payment-id="${
+                        p.id
+                    }" style="${p.status === 'pending' && p.transaction_id ? 'background: rgba(16, 185, 129, 0.05);' : ''}">
                         <td>${p.order_id ? `#${p.order_id}` : '<span class="badge" style="background:var(--accent-warning)">UNLINKED</span>'}</td>
                         <td>${p.customer_name || 'Guest'}</td>
                         <td>${formatCurrency(p.amount)}</td>
-                        <td><span class="badge" style="background: ${p.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'};">${p.payment_method}</span></td>
+                        <td><span class="badge" style="background: ${p.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'};">${
+                            p.payment_method
+                        }</span></td>
                         <td>${p.phone_number || '-'}</td>
                         <td>${p.transaction_id || (p.payment_method === 'Cash' ? 'N/A' : '<span style="color: rgba(255,255,255,0.75)">Waiting...</span>')}</td>
                         <td><span style="color: ${p.status === 'confirmed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${p.status}</span></td>
+                        <td style="max-width:14rem;font-size:0.85rem;color:rgba(255,255,255,0.85);">${
+                            p.mpesa_result_message
+                                ? escapeHtml(String(p.mpesa_result_message).slice(0, 120)) +
+                                  (String(p.mpesa_result_message).length > 120 ? '…' : '')
+                                : '—'
+                        }</td>
                         <td>
-                            ${p.status === 'pending' && p.transaction_id ? 
-                                `<button class="btn btn-primary" onclick="confirmPayment(${p.id}, ${p.order_id || 'null'})" style="padding: 0.5rem 1rem; animation: pulse 2s infinite;">${p.order_id ? 'Confirm' : 'Link & Confirm'}</button>` : 
-                                p.status === 'confirmed' ? '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Confirmed</span>' : 
-                                p.payment_method === 'Cash' ? '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Paid</span>' : 'Waiting...'
-                            }
+                            ${(() => {
+                                const orderTotal = p.total_amount != null ? Number(p.total_amount) : Number(p.amount);
+                                const canOffline =
+                                    p.order_id &&
+                                    p.payment_method !== 'Cash' &&
+                                    p.status !== 'confirmed' &&
+                                    (p.status === 'failed' || (p.status === 'pending' && !p.transaction_id));
+                                if (p.status === 'pending' && p.transaction_id) {
+                                    return `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();confirmPayment(${p.id}, ${
+                                        p.order_id || 'null'
+                                    })" style="padding: 0.5rem 1rem; animation: pulse 2s infinite;">${p.order_id ? 'Confirm' : 'Link & Confirm'}</button>`;
+                                }
+                                if (p.status === 'confirmed') {
+                                    return '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Confirmed</span>';
+                                }
+                                if (p.payment_method === 'Cash') {
+                                    return '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Paid</span>';
+                                }
+                                if (canOffline) {
+                                    return `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();openIncomingMpesaModal(${p.order_id}, ${orderTotal})" style="padding: 0.5rem 1rem;">Record offline M-Pesa</button>`;
+                                }
+                                return '<span style="color: rgba(255,255,255,0.75)">Waiting...</span>';
+                            })()}
                         </td>
                     </tr>
-                `).join('');
+                `
+                    )
+                    .join('');
+                bindPaymentRowHandlers(payments);
                 updateBadge();
             } catch (err) { alert(err.message); }
         }
@@ -90,7 +397,9 @@
             } catch (err) { console.error(err); }
         }
 
-        setInterval(updateBadge, 30000);
+        setInterval(() => {
+            if (!__detailModalOpen && !__incomingModalOpen && document.visibilityState === 'visible') loadData();
+        }, 7000);
 
         async function confirmPayment(paymentId, orderId) {
             let finalOrderId = orderId;
@@ -105,16 +414,19 @@
                         method: 'POST',
                         body: JSON.stringify({ orderId: finalOrderId })
                     });
+                    closePaymentDetail();
                     loadData();
                 } catch (err) { alert(err.message); }
             }
         }
 
         const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || user.role !== 'admin') {
+        if (!user || (user.role !== 'admin' && user.role !== 'cashier')) {
             window.location.href = 'index.html';
         } else {
-            document.getElementById('adminNavLink').style.display = 'block';
+            if (user.role === 'admin') {
+                document.getElementById('adminNavLink').style.display = 'block';
+            }
             document.getElementById('ordersNavLink').style.display = 'block';
             loadData();
         }
