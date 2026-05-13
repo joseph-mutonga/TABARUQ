@@ -398,9 +398,16 @@ exports.confirmPayment = async (req, res) => {
 
 exports.getPayments = async (req, res) => {
     try {
-        const [rows] = await db.execute(
-            'SELECT p.*, o.total_amount, o.customer_name as order_customer_name, u.username as confirmed_by_user FROM payments p LEFT JOIN orders o ON p.order_id = o.id LEFT JOIN users u ON p.confirmed_by = u.id ORDER BY COALESCE(p.confirmed_at, p.created_at) DESC, p.id DESC'
-        );
+        let query = 'SELECT p.*, o.total_amount, o.customer_name as order_customer_name, u.username as confirmed_by_user FROM payments p LEFT JOIN orders o ON p.order_id = o.id LEFT JOIN users u ON p.confirmed_by = u.id';
+        let params = [];
+        
+        if (req.query.status === 'incomplete') {
+            query += " WHERE p.status != 'confirmed'";
+        }
+        
+        query += ' ORDER BY COALESCE(p.confirmed_at, p.created_at) DESC, p.id DESC LIMIT 100';
+        
+        const [rows] = await db.execute(query, params);
         res.json({ success: true, data: rows });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });

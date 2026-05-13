@@ -10,7 +10,7 @@ exports.getStats = async (req, res) => {
         const [[pendingPayments]] = await db.execute('SELECT COUNT(*) as total FROM payments WHERE status = "pending"');
         const [[dueInvoices]] = await db.execute('SELECT COUNT(*) as total FROM orders WHERE payment_status != "paid"');
         const [[itemsCount]] = await db.execute('SELECT COUNT(*) as total FROM inventory');
-        const [[lowStock]] = await db.execute('SELECT COUNT(*) as total FROM inventory WHERE quantity <= low_stock_threshold');
+        const [[lowStock]] = await db.execute('SELECT COUNT(*) as total FROM inventory WHERE quantity <= low_stock_threshold AND LOWER(category) LIKE "%drink%"');
         const [[storesCount]] = await db.execute('SELECT COUNT(DISTINCT supplier) as total FROM inventory WHERE supplier IS NOT NULL AND supplier != ""');
         const [[supplierValue]] = await db.execute('SELECT SUM(cost_price * quantity) as total FROM inventory');
         const [topProducts] = await db.execute(`
@@ -21,8 +21,9 @@ exports.getStats = async (req, res) => {
             ORDER BY sold DESC
             LIMIT 15
         `);
-        const [[cashSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method = "Cash" AND status = "confirmed"');
-        const [[mpesaSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method LIKE "%M-Pesa%" AND status = "confirmed"');
+        const [[cashSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method = "Cash" AND status = "confirmed" AND YEAR(confirmed_at) = YEAR(CURDATE())');
+        const [[mpesaSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method LIKE "%M-Pesa%" AND status = "confirmed" AND YEAR(confirmed_at) = YEAR(CURDATE())');
+        const [[yearlyExpenses]] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE YEAR(expense_date) = YEAR(CURDATE())');
 
         const [recentOrders] = await db.execute(`
             SELECT o.*, o.customer_name, u.username as cashier_name, p.payment_method 
@@ -51,8 +52,8 @@ exports.getStats = async (req, res) => {
                         account: 'Petty Cash',
                         code: '87328',
                         in: cashSales.total || 0,
-                        out: expenses.total || 0,
-                        bal: (cashSales.total || 0) - (expenses.total || 0)
+                        out: yearlyExpenses.total || 0,
+                        bal: (cashSales.total || 0) - (yearlyExpenses.total || 0)
                     },
                     {
                         account: 'Paybill 522123',

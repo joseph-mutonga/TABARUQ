@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Reports | TABARUQ Foods</title>
+    <title>Transaction History | TABARUQ Foods</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="../css/style.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -18,16 +18,16 @@
                 <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
                 <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
-                <li><a href="reports.html" class="active"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html" class="active"><i class="fas fa-history"></i> History</a></li>
                 <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
-                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
 
         <main class="container">
-            <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Business Reports</h1>
+            <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Transaction History</h1>
             
             <div class="glass-card" style="margin-bottom: 2rem;">
                 <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
@@ -46,58 +46,7 @@
                         <label>End Date</label>
                         <input type="date" id="endDate" class="form-control">
                     </div>
-                    <button class="btn btn-primary" onclick="generateReports()">Generate Reports</button>
-                </div>
-            </div>
-
-            <div class="stats-grid">
-                <div class="glass-card stat-card">
-                    <p style="color: rgba(255,255,255,0.75);">Period Sales</p>
-                    <div class="stat-value" id="pSales">KES 0</div>
-                </div>
-                <div class="glass-card stat-card">
-                    <p style="color: rgba(255,255,255,0.75);">Period Expenses</p>
-                    <div class="stat-value" id="pExpenses" style="color: var(--accent-danger);">KES 0</div>
-                </div>
-                <div class="glass-card stat-card">
-                    <p style="color: rgba(255,255,255,0.75);">Net Profit</p>
-                    <div class="stat-value" id="pProfit" style="color: var(--accent-success);">KES 0</div>
-                </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; margin-top: 2rem;">
-                <div class="glass-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Daily Sales Breakdown</h3>
-                        <button class="btn" style="background: var(--accent-success); padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="exportCSV('salesReportTable')"><i class="fas fa-file-csv"></i> Export CSV</button>
-                    </div>
-                    <div class="table-container">
-                        <table id="salesReportTable">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Order Count</th>
-                                    <th>Total Sales</th>
-                                </tr>
-                            </thead>
-                            <tbody id="salesReportBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="glass-card">
-                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Top Selling Items</h3>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th>Sold</th>
-                                </tr>
-                            </thead>
-                            <tbody id="popularItemsBody"></tbody>
-                        </table>
-                    </div>
+                    <button class="btn btn-primary" onclick="generateReports()">View History</button>
                 </div>
             </div>
 
@@ -126,8 +75,33 @@
         </main>
     </div>
 
+    <div id="orderDetailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:520px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
+            <h2 style="color:#fff; margin-bottom:1rem; font-size:1.15rem;">Transaction Details</h2>
+            <dl id="orderDetailDl" style="color:rgba(255,255,255,0.92); font-size:0.95rem; line-height:1.6; margin:0;"></dl>
+            
+            <h3 style="color:#fff; margin-top:1.5rem; margin-bottom:0.5rem; font-size:1rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem;">Order Items</h3>
+            <div class="table-container" style="margin-bottom: 1rem;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orderItemsBody"></tbody>
+                </table>
+            </div>
+
+            <button type="button" class="btn" style="background:#64748b; color:#fff; width:100%;" onclick="closeOrderDetail()">Close</button>
+        </div>
+    </div>
+
     <script src="../js/api.js"></script>
     <script>
+        let __allHistory = [];
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
         document.getElementById('startDate').value = todayStr;
@@ -137,7 +111,6 @@
             const date = new Date();
             let start, end;
             
-            error_log = "";
             try {
                 if (range === 'today') {
                     start = end = date.toISOString().split('T')[0];
@@ -165,60 +138,81 @@
             const end = document.getElementById('endDate').value;
 
             try {
-                const profitResp = await apiFetch(`/reports/profit-loss?startDate=${start}&endDate=${end}`);
-                const salesResp = await apiFetch(`/reports/sales?startDate=${start}&endDate=${end}`);
                 const historyResp = await apiFetch(`/reports/transactions?startDate=${start}&endDate=${end}`);
+                __allHistory = historyResp.data;
                 
-                document.getElementById('pSales').textContent = formatCurrency(profitResp.data.totalSales);
-                document.getElementById('pExpenses').textContent = formatCurrency(profitResp.data.totalExpenses);
-                document.getElementById('pProfit').textContent = formatCurrency(profitResp.data.netProfit);
-
-                document.getElementById('salesReportBody').innerHTML = salesResp.data.map(s => `
-                    <tr>
-                        <td>${new Date(s.date).toLocaleDateString()}</td>
-                        <td>${s.order_count}</td>
-                        <td>${formatCurrency(s.total_sales)}</td>
-                    </tr>
-                `).join('');
-
-                document.getElementById('transactionHistoryBody').innerHTML = historyResp.data.map(t => `
-                    <tr>
+                document.getElementById('transactionHistoryBody').innerHTML = __allHistory.map(t => `
+                    <tr style="cursor: pointer; transition: background 0.15s ease;" onclick="showOrderDetail(${t.id})" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
                         <td>#${t.id}</td>
                         <td>${t.customer_name || 'Guest'}</td>
-                        <td>${new Date(t.created_at).toLocaleString()}</td>
+                        <td>${new Date(t.created_at).toLocaleString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit'})}</td>
                         <td>${formatCurrency(t.total_amount)}</td>
                         <td><span class="badge" style="background: ${t.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'}; white-space: nowrap;">${t.payment_method || 'M-Pesa'}</span></td>
                         <td><span style="color: ${t.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${t.status}</span></td>
                         <td>${t.cashier_name}</td>
                     </tr>
                 `).join('');
-
-                // Load popular items
-                const popResp = await apiFetch('/reports/popular');
-                document.getElementById('popularItemsBody').innerHTML = popResp.data.map(i => `
-                    <tr>
-                        <td>${i.name}</td>
-                        <td>${i.total_sold} ${i.unit || ''}</td>
-                    </tr>
-                `).join('');
             } catch (err) { alert(err.message); }
         }
 
-        async function checkPendingPayments() {
+        async function showOrderDetail(id) {
+            const t = __allHistory.find(x => x.id === id);
+            if (!t) return;
+            
+            const dl = document.getElementById('orderDetailDl');
+            const itemsBody = document.getElementById('orderItemsBody');
+            
+            function esc(s) {
+                const d = document.createElement('div');
+                d.textContent = s == null ? '' : String(s);
+                return d.innerHTML;
+            }
+            
+            const rows = [
+                ['Order ID', `#${t.id}`],
+                ['Customer', t.customer_name || 'Guest'],
+                ['Total Amount', formatCurrency(t.total_amount)],
+                ['Payment Method', t.payment_method || 'M-Pesa'],
+                ['M-Pesa Receipt', t.transaction_id || 'N/A'],
+                ['Status', t.status],
+                ['Date & Time', new Date(t.created_at).toLocaleString()],
+                ['Cashier', t.cashier_name]
+            ];
+            
+            dl.innerHTML = rows.map(([k, v]) => 
+                `<div style="margin-bottom:0.75rem"><dt style="font-weight:700;color:rgba(255,255,255,0.75);font-size:0.8rem;text-transform:uppercase;">${esc(k)}</dt><dd style="margin:0.25rem 0 0 0;word-break:break-word;">${esc(v)}</dd></div>`
+            ).join('');
+            
+            itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading items...</td></tr>';
+            document.getElementById('orderDetailModal').style.display = 'flex';
+            
             try {
-                const response = await apiFetch('/payments/pending-count');
-                const badge = document.getElementById('pendingBadge');
-                if (response.count > 0) {
-                    badge.textContent = response.count;
-                    badge.style.display = 'inline-block';
+                const resp = await apiFetch(`/orders/${id}`);
+                const items = resp.data.items || [];
+                if (items.length === 0) {
+                    itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No items found</td></tr>';
                 } else {
-                    badge.style.display = 'none';
+                    itemsBody.innerHTML = items.map(i => `
+                        <tr>
+                            <td>${esc(i.name)}</td>
+                            <td>${Number(i.quantity)}</td>
+                            <td>${formatCurrency(i.price)}</td>
+                            <td>${formatCurrency(i.subtotal)}</td>
+                        </tr>
+                    `).join('');
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) {
+                itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--accent-danger);">Failed to load items</td></tr>';
+            }
         }
 
-        checkPendingPayments();
-        setInterval(checkPendingPayments, 30000);
+        function closeOrderDetail() {
+            document.getElementById('orderDetailModal').style.display = 'none';
+        }
+
+        document.getElementById('orderDetailModal').addEventListener('click', (e) => {
+            if (e.target.id === 'orderDetailModal') closeOrderDetail();
+        });
 
         function exportCSV(tableId) {
             const table = document.getElementById(tableId).parentNode.querySelector('table');

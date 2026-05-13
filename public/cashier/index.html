@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cashier Dashboard | TABARUQ Foods</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -183,7 +183,7 @@
                 <div class="product-card" onclick="addToCart(${item.id})">
                     <div style="display:flex; justify-content:space-between; gap: 1rem; align-items:center;">
                         <strong>${item.name}</strong>
-                        <span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>
+                        ${(item.category || '').toLowerCase().includes('drink') ? `<span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>` : ''}
                     </div>
                     <div class="product-meta">
                         <span>${item.category || 'Food & Drink'}</span>
@@ -219,12 +219,15 @@
             cartList.innerHTML = cart.map((item, index) => {
                 total += item.selling_price * item.quantity;
                 return `
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; background: rgba(255,255,255,0.05); padding: 0.9rem; border-radius: 0.85rem;">
-                        <div>
-                            <p>${item.name}</p>
-                            <small style="color: rgba(255,255,255,0.75);">${formatCurrency(item.selling_price)} x ${item.quantity}</small>
+                    <div class="cart-item">
+                        <div class="cart-item-details">
+                            <div class="cart-item-name">${item.name}</div>
+                            <div class="cart-item-price">${formatCurrency(item.selling_price)} x ${item.quantity}</div>
                         </div>
-                        <button onclick="removeFromCart(${index})" style="background: none; border: none; color: var(--accent-danger); cursor: pointer;"><i class="fas fa-trash"></i></button>
+                        <div class="cart-item-actions">
+                            <span class="cart-item-total">${formatCurrency(item.selling_price * item.quantity)}</span>
+                            <button onclick="removeFromCart(${index})" class="cart-item-remove"><i class="fas fa-trash"></i></button>
+                        </div>
                     </div>
                 `;
             }).join('');

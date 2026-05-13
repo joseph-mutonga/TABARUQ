@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Management | TABARUQ Foods</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .modal {
@@ -161,7 +161,7 @@
                 <tr>
                     <td>${item.name}</td>
                     <td>${item.category}</td>
-                    <td><span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span></td>
+                    <td>${(item.category || '').toLowerCase().includes('drink') ? `<span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>` : '<span style="color: rgba(255,255,255,0.5)">—</span>'}</td>
                     <td>${formatCurrency(item.cost_price)}</td>
                     <td>${formatCurrency(item.selling_price)}</td>
                     <td>
@@ -194,9 +194,23 @@
                 document.getElementById('modalTitle').textContent = 'Add Item';
                 document.getElementById('itemForm').reset();
                 document.getElementById('itemId').value = '';
-                document.getElementById('initialStockGroup').style.display = 'block';
+                document.getElementById('initialStockGroup').style.display = 'none';
             }
         }
+
+        document.getElementById('itemCategory').addEventListener('input', (e) => {
+            // Only toggle if we are adding a new item (itemId is empty)
+            if (!document.getElementById('itemId').value) {
+                const isDrink = e.target.value.toLowerCase().includes('drink');
+                const stockGroup = document.getElementById('initialStockGroup');
+                if (isDrink) {
+                    stockGroup.style.display = 'block';
+                } else {
+                    stockGroup.style.display = 'none';
+                    document.getElementById('itemQty').value = '0';
+                }
+            }
+        });
 
         function closeModal() {
             document.getElementById('itemModal').style.display = 'none';

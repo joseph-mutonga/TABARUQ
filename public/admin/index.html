@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard | TABARUQ Foods</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap">
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -17,6 +17,7 @@
                 <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
                 <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
                 <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
@@ -39,21 +40,6 @@
                     <div class="card-value" id="allUsers">0</div>
                 </div>
                 <div class="dashboard-card">
-                    <div class="card-title"><i class="fas fa-sms"></i><span>SMS (Outbox)</span></div>
-                    <div class="card-value" id="smsOutbox">0</div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="card-title"><i class="fas fa-comments-dollar"></i><span>Supplier Balances</span></div>
-                    <div class="card-value" id="supplierBalances">KES 0</div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="card-title"><i class="fas fa-store"></i><span>Stores</span></div>
-                    <div class="card-value" id="stores">0</div>
-                </div>
-            </div>
-
-            <div class="overview-grid">
-                <div class="dashboard-card">
                     <div class="card-title"><i class="fas fa-chart-line"></i><span>Today's Sales</span></div>
                     <div class="card-value" id="todaySales">KES 0</div>
                 </div>
@@ -75,7 +61,6 @@
                 <button class="quick-action-button" onclick="navigateTo('customers.html')"><i class="fas fa-user-friends"></i> Customers</button>
                 <button class="quick-action-button" onclick="navigateTo('../cashier/index.html')"><i class="fas fa-cash-register"></i> POS</button>
                 <button class="quick-action-button" onclick="navigateTo('../cashier/orders.html')"><i class="fas fa-check-double"></i> Confirm Payments</button>
-                <button class="quick-action-button" onclick="navigateTo('inventory.html')"><i class="fas fa-truck"></i> Supplier Stock</button>
             </div>
 
             <div class="sections-grid">
@@ -163,7 +148,7 @@
                             <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Account Report</h3>
                             <p class="card-small">Latest account balances for cash and paybill activity.</p>
                         </div>
-                        <span class="badge" style="background: var(--accent-success);">Dec 2023</span>
+                        <span class="badge" style="background: var(--accent-success);"><script>document.write(new Date().getFullYear())</script> Year to Date</span>
                     </div>
                     <div class="table-container">
                         <table>
@@ -232,9 +217,6 @@
                 const data = response.data;
 
                 document.getElementById('allUsers').textContent = data.allUsers;
-                document.getElementById('smsOutbox').textContent = data.smsOutbox;
-                document.getElementById('supplierBalances').textContent = formatCurrency(data.supplierBalances);
-                document.getElementById('stores').textContent = data.stores;
                 document.getElementById('dueInvoices').textContent = data.dueInvoices;
                 document.getElementById('itemsCount').textContent = data.itemsCount;
                 document.getElementById('itemsNeedsRestocking').textContent = data.itemsNeedsRestocking;
