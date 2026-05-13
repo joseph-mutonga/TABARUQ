@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitchen Display | Delivery Orders</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=4">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        .kitchen-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+            padding: 1rem 0;
+        }
+        .order-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            animation: slideIn 0.3s ease;
+        }
+        .platform-tag {
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .uber { background: #000; color: #fff; }
+        .bolt { background: #34d399; color: #fff; }
+        .glovo { background: #ffc244; color: #000; }
+        
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding: 0.5rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="kitchen.html" class="active"><i class="fas fa-tv"></i> Kitchen Display</a></li>
+                <li><a href="orders.html"><i class="fas fa-history"></i> Orders</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
+                <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Kitchen Display</h1>
+                <div id="connectionStatus" style="font-size:0.85rem; color:var(--accent-success);"><i class="fas fa-circle"></i> Connected</div>
+            </header>
+
+            <div class="kitchen-grid" id="ordersGrid">
+                <!-- Orders will appear here -->
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        const socket = io();
+        const ordersGrid = document.getElementById('ordersGrid');
+        let activeOrders = [];
+
+        socket.on('connect', () => {
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-circle"></i> Connected';
+            document.getElementById('connectionStatus').style.color = 'var(--accent-success)';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-circle"></i> Disconnected';
+            document.getElementById('connectionStatus').style.color = 'var(--accent-danger)';
+        });
+
+        socket.on('new_delivery_order', (order) => {
+            console.log('New Order Received:', order);
+            activeOrders.unshift(order);
+            renderOrders();
+            playNotification();
+        });
+
+        async function loadActiveOrders() {
+            try {
+                const res = await apiFetch('/delivery/orders?status=pending');
+                activeOrders = res.data;
+                renderOrders();
+            } catch (err) { console.error(err); }
+        }
+
+        function renderOrders() {
+            ordersGrid.innerHTML = activeOrders.map(order => `
+                <div class="glass-card order-card" id="order-${order.id}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <span class="platform-tag ${order.platform.toLowerCase()}">${order.platform}</span>
+                            <h3 style="margin: 0.5rem 0 0.2rem 0; color:#fff;">#${order.platform_order_id}</h3>
+                            <span style="font-size:0.85rem; color:rgba(255,255,255,0.6);">${order.customer_name}</span>
+                        </div>
+                        <span class="badge" style="background:var(--accent-warning)">${order.status}</span>
+                    </div>
+
+                    <div style="margin: 1rem 0;">
+                        ${(order.items || []).map(item => `
+                            <div class="item-row">
+                                <span>${item.quantity}x <strong>${item.name || item.item_name}</strong></span>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div style="display:flex; gap:0.5rem; margin-top:auto;">
+                        ${order.status === 'pending' ? 
+                            `<button class="btn btn-primary" style="flex:1;" onclick="updateStatus(${order.id}, 'accepted')">Accept</button>` : 
+                            `<button class="btn" style="flex:1; background:var(--accent-success);" onclick="updateStatus(${order.id}, 'ready')">Food Ready</button>`
+                        }
+                        <button class="btn" style="background:var(--accent-danger);" onclick="rejectOrder(${order.id})"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function updateStatus(id, status) {
+            try {
+                await apiFetch(`/delivery/orders/${id}/status`, {
+                    method: 'POST',
+                    body: JSON.stringify({ status })
+                });
+                loadActiveOrders();
+            } catch (err) { alert(err.message); }
+        }
+
+        async function rejectOrder(id) {
+            const reason = prompt("Enter rejection reason:");
+            if (!reason) return;
+            try {
+                await apiFetch(`/delivery/orders/${id}/status`, {
+                    method: 'POST',
+                    body: JSON.stringify({ status: 'rejected', reason })
+                });
+                loadActiveOrders();
+            } catch (err) { alert(err.message); }
+        }
+
+        function playNotification() {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+            audio.play();
+        }
+
+        loadActiveOrders();
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

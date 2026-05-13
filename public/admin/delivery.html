@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Settlements | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=4">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="delivery.html" class="active"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="inventory.html"></a></li><li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li><li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Delivery Reconciliation</h1>
+
+            <div class="stats-grid" style="margin-top:2rem;">
+                <div class="stat-card">
+                    <div style="font-size:0.9rem; color:var(--text-gray);">Pending Settlements</div>
+                    <div class="stat-value" id="pendingRevenue" style="color:var(--accent-warning)">KES 0</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size:0.9rem; color:var(--text-gray);">Net Revenue (After Fees)</div>
+                    <div class="stat-value" id="totalNetRevenue" style="color:var(--accent-success)">KES 0</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size:0.9rem; color:var(--text-gray);">Total Commission Paid</div>
+                    <div class="stat-value" id="totalFees" style="color:var(--accent-danger)">KES 0</div>
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-top:2rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                    <h3>Platform Reconciliation Report</h3>
+                    <button class="btn btn-primary" onclick="openSettlementModal()"><i class="fas fa-plus"></i> Record Settlement</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Platform</th>
+                                <th>Total Orders</th>
+                                <th>Gross Revenue</th>
+                                <th>Commission (Fees)</th>
+                                <th>Net Revenue</th>
+                                <th>Settled</th>
+                                <th>Pending</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reconciliationBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settlement Modal -->
+    <div id="settlementModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:500px; width:100%;" onclick="event.stopPropagation()">
+            <h2 style="color:#fff; margin-bottom:1.5rem;">Record Platform Settlement</h2>
+            <form id="settlementForm">
+                <div class="form-group">
+                    <label>Platform</label>
+                    <select id="sPlatform" class="form-control" required>
+                        <option value="Uber Eats">Uber Eats</option>
+                        <option value="Bolt Food">Bolt Food</option>
+                        <option value="Glovo">Glovo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Payout ID / Ref</label>
+                    <input type="text" id="sPayoutId" class="form-control" placeholder="e.g. SET-123456" required>
+                </div>
+                <div class="form-group">
+                    <label>Amount Received (Net)</label>
+                    <input type="number" id="sAmount" class="form-control" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Date Received</label>
+                    <input type="date" id="sDate" class="form-control" required>
+                </div>
+                <div style="display:flex; gap:1rem; margin-top:2rem;">
+                    <button type="button" class="btn" style="flex:1; background:#475569;" onclick="closeSettlementModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="flex:1;">Confirm Payout</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        async function loadReconciliation() {
+            try {
+                const res = await apiFetch('/delivery/reports/reconciliation');
+                const data = res.data;
+                
+                let totalPending = 0;
+                let totalNet = 0;
+                let totalFees = 0;
+
+                document.getElementById('reconciliationBody').innerHTML = data.map(r => {
+                    totalPending += Number(r.pending_revenue);
+                    totalNet += Number(r.net_revenue);
+                    totalFees += Number(r.total_fees);
+
+                    return `
+                        <tr>
+                            <td><strong>${r.platform}</strong></td>
+                            <td>${r.total_orders}</td>
+                            <td>${formatCurrency(r.gross_revenue)}</td>
+                            <td style="color:var(--accent-danger)">${formatCurrency(r.total_fees)}</td>
+                            <td style="color:var(--accent-success); font-weight:700;">${formatCurrency(r.net_revenue)}</td>
+                            <td>${formatCurrency(r.settled_revenue)}</td>
+                            <td style="color:${r.pending_revenue > 0 ? 'var(--accent-warning)' : 'inherit'}">${formatCurrency(r.pending_revenue)}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                document.getElementById('pendingRevenue').textContent = formatCurrency(totalPending);
+                document.getElementById('totalNetRevenue').textContent = formatCurrency(totalNet);
+                document.getElementById('totalFees').textContent = formatCurrency(totalFees);
+            } catch (err) { console.error(err); }
+        }
+
+        function openSettlementModal() {
+            document.getElementById('settlementModal').style.display = 'flex';
+            document.getElementById('sDate').value = new Date().toISOString().split('T')[0];
+        }
+
+        function closeSettlementModal() {
+            document.getElementById('settlementModal').style.display = 'none';
+        }
+
+        document.getElementById('settlementForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const platform = document.getElementById('sPlatform').value;
+            const payout_id = document.getElementById('sPayoutId').value;
+            const amount = document.getElementById('sAmount').value;
+            const date_received = document.getElementById('sDate').value;
+
+            try {
+                // In a full implementation, we'd also pass orderIds to link
+                await apiFetch('/delivery/settlements', {
+                    method: 'POST',
+                    body: JSON.stringify({ platform, payout_id, amount, date_received })
+                });
+                alert('Settlement recorded successfully');
+                closeSettlementModal();
+                loadReconciliation();
+            } catch (err) { alert(err.message); }
+        };
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+
+        loadReconciliation();
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>
