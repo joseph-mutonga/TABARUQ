@@ -22,6 +22,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/customers', require('./routes/customers'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/delivery', require('./routes/delivery'));
+app.use('/api/c2b', require('./routes/c2b'));
 
 app.use(express.static(path.join(__dirname, '../public')));
 

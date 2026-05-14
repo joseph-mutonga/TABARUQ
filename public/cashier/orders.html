@@ -344,30 +344,34 @@
                         <td>${p.transaction_id || (p.payment_method === 'Cash' ? 'N/A' : '<span style="color: rgba(255,255,255,0.75)">Waiting...</span>')}</td>
                         <td><span style="color: ${p.status === 'confirmed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${p.status}</span></td>
                         <td>${p.confirmed_at ? new Date(p.confirmed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : (p.status === 'confirmed' ? new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—')}</td>
-                        <td>
-                            ${(() => {
-                                const orderTotal = p.total_amount != null ? Number(p.total_amount) : Number(p.amount);
-                                const canOffline =
-                                    p.order_id &&
-                                    p.payment_method !== 'Cash' &&
-                                    p.status !== 'confirmed' &&
-                                    (p.status === 'failed' || (p.status === 'pending' && !p.transaction_id));
-                                if (p.status === 'pending' && p.transaction_id) {
-                                    return `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();confirmPayment(${p.id}, ${
-                                        p.order_id || 'null'
-                                    })" style="padding: 0.5rem 1rem; animation: pulse 2s infinite;">${p.order_id ? 'Confirm' : 'Link & Confirm'}</button>`;
-                                }
-                                if (p.status === 'confirmed') {
-                                    return '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Confirmed</span>';
-                                }
-                                if (p.payment_method === 'Cash') {
-                                    return '<span style="color:var(--accent-success)"><i class="fas fa-check-circle"></i> Paid</span>';
-                                }
-                                if (canOffline) {
-                                    return `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();openIncomingMpesaModal(${p.order_id}, ${orderTotal})" style="padding: 0.5rem 1rem;">Record offline M-Pesa</button>`;
-                                }
-                                return '<span style="color: rgba(255,255,255,0.75)">Waiting...</span>';
-                            })()}
+                        <td style="white-space: nowrap;">
+                            <div style="display: flex; gap: 0.4rem;">
+                                ${(() => {
+                                    const orderTotal = p.total_amount != null ? Number(p.total_amount) : Number(p.amount);
+                                    const canAction = p.order_id && p.status !== 'confirmed' && p.payment_method !== 'Cash';
+                                    
+                                    let html = '';
+                                    
+                                    if (p.status === 'pending' && p.transaction_id) {
+                                        html += `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();confirmPayment(${p.id}, ${p.order_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; animation: pulse 2s infinite;">Confirm</button>`;
+                                    } else if (canAction) {
+                                        // STK Retry
+                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-success); color: #fff;" onclick="event.stopPropagation();retrySTK(${p.order_id}, ${orderTotal}, '${p.phone_number || ''}', '${p.customer_name || ''}')" title="Retry STK Push"><i class="fas fa-paper-plane"></i> STK</button>`;
+                                        
+                                        // Cash Option
+                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: #fff;" onclick="event.stopPropagation();payWithCash(${p.order_id}, ${orderTotal})" title="Pay with Cash"><i class="fas fa-money-bill-wave"></i> Cash</button>`;
+                                        
+                                        // Record Offline
+                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #475569; color: #fff;" onclick="event.stopPropagation();openIncomingMpesaModal(${p.order_id}, ${orderTotal})" title="Link Manual Receipt">Manual</button>`;
+                                    } else if (p.status === 'confirmed' || p.payment_method === 'Cash') {
+                                        html += '<span style="color:var(--accent-success); font-size: 0.85rem;"><i class="fas fa-check-circle"></i> Paid</span>';
+                                    } else {
+                                        html += '<span style="color: rgba(255,255,255,0.75); font-size: 0.85rem;">Waiting...</span>';
+                                    }
+                                    
+                                    return html;
+                                })()}
+                            </div>
                         </td>
                     </tr>
                 `
@@ -394,6 +398,41 @@
         setInterval(() => {
             if (!__detailModalOpen && !__incomingModalOpen && document.visibilityState === 'visible') loadData();
         }, 7000);
+
+        async function retrySTK(orderId, amount, oldPhone, customerName) {
+            const phone = prompt(`Confirm phone number for STK Push (Order #${orderId}):`, oldPhone || '2547');
+            if (!phone) return;
+            
+            try {
+                const res = await apiFetch('/payments/stk-push', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        orderId,
+                        amount,
+                        phoneNumber: phone,
+                        customer_name: customerName
+                    })
+                });
+                alert('STK Push initiated successfully. Please check the customer\'s phone.');
+                loadData();
+            } catch (err) {
+                alert(`STK Push failed: ${err.message}`);
+            }
+        }
+
+        async function payWithCash(orderId, amount) {
+            if (confirm(`Mark Order #${orderId} as paid with Cash (KES ${amount})?`)) {
+                try {
+                    await apiFetch('/payments/cash', {
+                        method: 'POST',
+                        body: JSON.stringify({ orderId, amount })
+                    });
+                    loadData();
+                } catch (err) {
+                    alert(`Cash payment failed: ${err.message}`);
+                }
+            }
+        }
 
         async function confirmPayment(paymentId, orderId) {
             let finalOrderId = orderId;

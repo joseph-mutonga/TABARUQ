@@ -81,7 +81,7 @@ exports.initiateSTKPush = async (req, res) => {
     try {
         const token = await getMpesaToken();
         const timestamp = generateTimestamp();
-        const shortCode = process.env.MPESA_SHORTCODE;
+        const shortCode = process.env.MPESA_STK_SHORTCODE || process.env.MPESA_SHORTCODE;
         const passkey = process.env.MPESA_PASSKEY;
         const password = Buffer.from(`${shortCode}${passkey}${timestamp}`).toString('base64');
 
@@ -110,11 +110,25 @@ exports.initiateSTKPush = async (req, res) => {
         if (response.data.ResponseCode === '0') {
             const checkoutID = response.data.CheckoutRequestID;
             
-            // Log payment initiation
-            await db.execute(
-                'INSERT INTO payments (order_id, amount, phone_number, mpesa_checkout_id, status, customer_name) VALUES (?, ?, ?, ?, ?, ?)',
-                [orderId, amount, phoneNumber, checkoutID, 'pending', customer_name || 'Guest']
+            // Log payment initiation - Check if a pending payment already exists for this order
+            const [existingPending] = await db.execute(
+                'SELECT id FROM payments WHERE order_id = ? AND status = "pending" LIMIT 1',
+                [orderId]
             );
+
+            if (existingPending.length > 0) {
+                // Update existing pending record with new checkout ID and phone
+                await db.execute(
+                    'UPDATE payments SET amount = ?, phone_number = ?, mpesa_checkout_id = ?, customer_name = ? WHERE id = ?',
+                    [amount, phoneNumber, checkoutID, customer_name || 'Guest', existingPending[0].id]
+                );
+            } else {
+                // Insert new record
+                await db.execute(
+                    'INSERT INTO payments (order_id, amount, phone_number, mpesa_checkout_id, status, customer_name) VALUES (?, ?, ?, ?, ?, ?)',
+                    [orderId, amount, phoneNumber, checkoutID, 'pending', customer_name || 'Guest']
+                );
+            }
 
             res.json({ success: true, message: 'STK Push initiated', checkoutID });
         } else {
@@ -127,6 +141,9 @@ exports.initiateSTKPush = async (req, res) => {
 };
 
 exports.mpesaCallback = async (req, res) => {
+    console.log('--- Incoming M-Pesa Callback ---');
+    console.log(JSON.stringify(req.body, null, 2));
+    
     const acknowledge = () => res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
     try {
@@ -606,11 +623,14 @@ exports.getUnlinkedIncoming = async (req, res) => {
             `SELECT id, amount, transaction_id, phone_number, payment_method, status, mpesa_checkout_id,
                     created_at, confirmed_at, customer_name, mpesa_result_message
              FROM payments
-             WHERE order_id IS NULL
-               AND status IN ('confirmed', 'pending')
+             WHERE (
+                    (order_id IS NULL AND status IN ('confirmed', 'pending'))
+                 OR (order_id IS NOT NULL AND status = 'pending' AND mpesa_checkout_id IS NOT NULL)
+               )
                AND (
                     (transaction_id IS NOT NULL AND TRIM(transaction_id) <> '')
                  OR (status = 'pending' AND mpesa_result_message IS NOT NULL AND CHAR_LENGTH(TRIM(mpesa_result_message)) > 0)
+                 OR (mpesa_checkout_id IS NOT NULL AND status = 'pending')
                )
                AND (payment_method IS NULL OR payment_method <> 'Cash')
                AND NOT EXISTS (
@@ -729,16 +749,18 @@ exports.mpesaC2BValidation = async (req, res) => {
 
 const registerC2BURLsInternal = async () => {
     const token = await getMpesaToken();
-    const shortCode = process.env.MPESA_SHORTCODE;
-    const callbackBase = process.env.MPESA_CALLBACK_URL.replace('/api/payments/callback', '/api/payments');
+    const shortCode = process.env.MPESA_C2B_SHORTCODE || process.env.MPESA_SHORTCODE;
+    const callbackBase = process.env.MPESA_CALLBACK_URL ? process.env.MPESA_CALLBACK_URL.replace('/api/payments/callback', '/api/payments') : '';
+    const confirmationUrl = process.env.MPESA_C2B_CONFIRMATION_URL || `${callbackBase}/c2b-confirmation`;
+    const validationUrl = process.env.MPESA_C2B_VALIDATION_URL || `${callbackBase}/c2b-validation`;
     
     const response = await axios.post(
         process.env.MPESA_C2B_REGISTER_URL || 'https://sandbox.safaricom.co.ke/mpesa/c2b/v2/registerurl',
         {
             ShortCode: shortCode,
             ResponseType: 'Completed',
-            ConfirmationURL: `${callbackBase}/c2b-confirmation`,
-            ValidationURL: `${callbackBase}/c2b-validation`,
+            ConfirmationURL: confirmationUrl,
+            ValidationURL: validationUrl,
         },
         {
             headers: {
