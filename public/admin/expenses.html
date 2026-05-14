@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expense Management | TABARUQ Foods</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="../css/style.css?v=4">
+    <link rel="stylesheet" href="../css/style.css?v=5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -14,11 +14,11 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
-                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
-                <li><a href="inventory.html"></a></li><li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li><li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li><a href="expenses.html" class="active"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
                 <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
@@ -31,6 +31,25 @@
                 <button class="btn btn-primary" onclick="document.getElementById('expenseModal').style.display='flex'">Record Expense</button>
             </header>
 
+            <div class="overview-grid" style="margin-bottom: 2rem;">
+                <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
+                    <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar-day"></i><span>Today</span></div>
+                    <div class="card-value" id="expToday" style="font-size: 1.5rem;">KES 0</div>
+                </div>
+                <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
+                    <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar-week"></i><span>This Week</span></div>
+                    <div class="card-value" id="expWeek" style="font-size: 1.5rem;">KES 0</div>
+                </div>
+                <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
+                    <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar-alt"></i><span>This Month</span></div>
+                    <div class="card-value" id="expMonth" style="font-size: 1.5rem;">KES 0</div>
+                </div>
+                <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
+                    <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar"></i><span>This Year</span></div>
+                    <div class="card-value" id="expYear" style="font-size: 1.5rem;">KES 0</div>
+                </div>
+            </div>
+
             <div class="glass-card">
                 <div class="table-container">
                     <table>
@@ -40,6 +59,7 @@
                                 <th>Category</th>
                                 <th>Description</th>
                                 <th>Amount</th>
+                                <th>Recorded By</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -51,7 +71,7 @@
     </div>
 
     <!-- Modal -->
-    <div id="expenseModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center;">
+    <div id="expenseModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index: 1000;">
         <div class="glass-card" style="width: 400px;">
             <h2 style="color: #ffffff; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Record Expense</h2>
             <form id="expenseForm">
@@ -85,7 +105,7 @@
         </div>
     </div>
 
-    <script src="../js/api.js"></script>
+    <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         async function loadExpenses() {
             try {
@@ -96,13 +116,26 @@
                         <td>${new Date(e.expense_date).toLocaleDateString()}</td>
                         <td>${e.category}</td>
                         <td>${e.description}</td>
-                        <td style="color: var(--accent-danger);">${formatCurrency(e.amount)}</td>
+                        <td style="color: var(--accent-danger); font-weight: 700;">${formatCurrency(e.amount)}</td>
+                        <td><span class="badge" style="background: var(--primary);">${e.creator_name || 'System'}</span></td>
                         <td>
                             <button class="btn" style="background: var(--accent-danger); padding: 0.5rem;" onclick="deleteExpense(${e.id})"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                 `).join('');
+                loadStats(); // Reload summary cards too
             } catch (err) { alert(err.message); }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await apiFetch('/expenses/stats');
+                const data = response.data;
+                document.getElementById('expToday').textContent = formatCurrency(data.today || 0);
+                document.getElementById('expWeek').textContent = formatCurrency(data.week || 0);
+                document.getElementById('expMonth').textContent = formatCurrency(data.month || 0);
+                document.getElementById('expYear').textContent = formatCurrency(data.year || 0);
+            } catch (err) { console.error(err); }
         }
 
         document.getElementById('expenseForm').onsubmit = async (e) => {
@@ -137,3 +170,4 @@
     </script>
 </body>
 </html>
+

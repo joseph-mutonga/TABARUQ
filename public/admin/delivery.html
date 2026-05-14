@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Delivery Settlements | TABARUQ Foods</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="../css/style.css?v=4">
+    <link rel="stylesheet" href="../css/style.css?v=5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -14,17 +14,24 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="delivery.html" class="active"><i class="fas fa-truck"></i> Delivery Module</a></li>
-                <li><a href="inventory.html"></a></li><li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li><li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
+                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
+                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
 
         <main class="container">
-            <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Delivery Reconciliation</h1>
+            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
+                <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Delivery Reconciliation</h1>
+                <button class="btn" style="background:var(--accent-magenta); color:white;" onclick="simulateWebhook()"><i class="fas fa-vial"></i> Test Order Webhook</button>
+            </header>
 
-            <div class="stats-grid" style="margin-top:2rem;">
+            <div class="stats-grid">
                 <div class="stat-card">
                     <div style="font-size:0.9rem; color:var(--text-gray);">Pending Settlements</div>
                     <div class="stat-value" id="pendingRevenue" style="color:var(--accent-warning)">KES 0</div>
@@ -66,39 +73,52 @@
 
     <!-- Settlement Modal -->
     <div id="settlementModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
-        <div class="glass-card" style="max-width:500px; width:100%;" onclick="event.stopPropagation()">
+        <div class="glass-card" style="max-width:600px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
             <h2 style="color:#fff; margin-bottom:1.5rem;">Record Platform Settlement</h2>
             <form id="settlementForm">
                 <div class="form-group">
                     <label>Platform</label>
-                    <select id="sPlatform" class="form-control" required>
+                    <select id="sPlatform" class="form-control" required onchange="loadPendingOrders()">
                         <option value="Uber Eats">Uber Eats</option>
                         <option value="Bolt Food">Bolt Food</option>
                         <option value="Glovo">Glovo</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Payout ID / Ref</label>
-                    <input type="text" id="sPayoutId" class="form-control" placeholder="e.g. SET-123456" required>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label>Payout ID / Ref</label>
+                        <input type="text" id="sPayoutId" class="form-control" placeholder="e.g. SET-123456" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Date Received</label>
+                        <input type="date" id="sDate" class="form-control" required>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Amount Received (Net)</label>
                     <input type="number" id="sAmount" class="form-control" step="0.01" required>
                 </div>
-                <div class="form-group">
-                    <label>Date Received</label>
-                    <input type="date" id="sDate" class="form-control" required>
+
+                <div style="margin-top:1.5rem;">
+                    <label style="display:block; margin-bottom:0.5rem; color:var(--text-gray); font-size:0.85rem;">Select Orders covered by this settlement:</label>
+                    <div id="pendingOrdersList" style="max-height:200px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:0.5rem;">
+                        <!-- Pending orders will appear here -->
+                        <p style="font-size:0.85rem; color:rgba(255,255,255,0.5); padding:1rem; text-align:center;">Select platform to see orders</p>
+                    </div>
                 </div>
+
                 <div style="display:flex; gap:1rem; margin-top:2rem;">
                     <button type="button" class="btn" style="flex:1; background:#475569;" onclick="closeSettlementModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" style="flex:1;">Confirm Payout</button>
+                    <button type="submit" class="btn btn-primary" style="flex:1;">Confirm & Link Orders</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <script src="../js/api.js"></script>
+    <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
+        let __pendingOrders = [];
+
         async function loadReconciliation() {
             try {
                 const res = await apiFetch('/delivery/reports/reconciliation');
@@ -132,9 +152,37 @@
             } catch (err) { console.error(err); }
         }
 
+        async function loadPendingOrders() {
+            const platform = document.getElementById('sPlatform').value;
+            const container = document.getElementById('pendingOrdersList');
+            container.innerHTML = '<p style="padding:1rem; text-align:center;">Loading orders...</p>';
+            
+            try {
+                const res = await apiFetch('/delivery/orders');
+                __pendingOrders = res.data.filter(o => o.platform === platform && o.payment_status !== 'paid');
+                
+                if (__pendingOrders.length === 0) {
+                    container.innerHTML = `<p style="font-size:0.85rem; color:rgba(255,255,255,0.5); padding:1rem; text-align:center;">No pending orders for ${platform}</p>`;
+                    return;
+                }
+
+                container.innerHTML = __pendingOrders.map(o => `
+                    <div style="display:flex; align-items:center; gap:0.75rem; padding:0.5rem; border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <input type="checkbox" name="orderSelect" value="${o.id}" style="width:18px; height:18px; cursor:pointer;">
+                        <div style="flex:1;">
+                            <div style="font-size:0.9rem; font-weight:600;">#${o.platform_order_id}</div>
+                            <div style="font-size:0.75rem; color:rgba(255,255,255,0.6);">${new Date(o.created_at).toLocaleDateString()} - ${o.customer_name}</div>
+                        </div>
+                        <div style="font-weight:700;">${formatCurrency(o.total_amount)}</div>
+                    </div>
+                `).join('');
+            } catch (err) { container.innerHTML = `<p style="color:var(--accent-danger); padding:1rem;">Failed to load orders</p>`; }
+        }
+
         function openSettlementModal() {
             document.getElementById('settlementModal').style.display = 'flex';
             document.getElementById('sDate').value = new Date().toISOString().split('T')[0];
+            loadPendingOrders();
         }
 
         function closeSettlementModal() {
@@ -147,18 +195,47 @@
             const payout_id = document.getElementById('sPayoutId').value;
             const amount = document.getElementById('sAmount').value;
             const date_received = document.getElementById('sDate').value;
+            
+            const selectedOrderIds = Array.from(document.querySelectorAll('input[name="orderSelect"]:checked')).map(cb => cb.value);
+
+            if (selectedOrderIds.length === 0) {
+                if (!confirm("You haven't selected any orders. Continue anyway?")) return;
+            }
 
             try {
-                // In a full implementation, we'd also pass orderIds to link
                 await apiFetch('/delivery/settlements', {
                     method: 'POST',
-                    body: JSON.stringify({ platform, payout_id, amount, date_received })
+                    body: JSON.stringify({ platform, payout_id, amount, date_received, orderIds: selectedOrderIds })
                 });
-                alert('Settlement recorded successfully');
+                alert('Settlement recorded and orders linked successfully!');
                 closeSettlementModal();
                 loadReconciliation();
             } catch (err) { alert(err.message); }
         };
+
+        async function simulateWebhook() {
+            const platform = ["Uber Eats", "Bolt Food", "Glovo"][Math.floor(Math.random() * 3)];
+            const orderId = "TEST-" + Math.floor(1000 + Math.random() * 9000);
+            const total = Math.floor(500 + Math.random() * 2000);
+            
+            const payload = {
+                platform,
+                order_id: orderId,
+                customer_name: "Test Customer",
+                total,
+                items: [{ name: "Swahili Special", quantity: 1, price: total }],
+                fees: [{ type: "commission", percentage: 25, amount: total * 0.25 }]
+            };
+
+            try {
+                await apiFetch('/delivery/webhook', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                alert(`Test Order (${orderId}) sent! Check the Kitchen Display.`);
+                loadReconciliation();
+            } catch (err) { alert("Simulation failed: " + err.message); }
+        }
 
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user || user.role !== 'admin') window.location.href = '../index.html';
@@ -168,3 +245,4 @@
     </script>
 </body>
 </html>
+

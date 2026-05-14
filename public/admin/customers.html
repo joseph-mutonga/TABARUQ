@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Customers | TABARUQ Foods</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="../css/style.css?v=4">
+    <link rel="stylesheet" href="../css/style.css?v=5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -14,13 +14,13 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="inventory.html"></a></li><li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li><li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
                 <li><a href="customers.html" class="active"><i class="fas fa-user-friends"></i> Customers</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
-                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
-                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
@@ -82,7 +82,7 @@
         </div>
     </div>
 
-    <script src="../js/api.js"></script>
+    <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         async function loadCustomers() {
             try {
@@ -139,3 +139,4 @@
     </script>
 </body>
 </html>
+

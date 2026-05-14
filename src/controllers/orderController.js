@@ -47,6 +47,14 @@ exports.createOrder = async (req, res) => {
         }
 
         await connection.commit();
+        
+        // Emit Real-time Events
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('order_update', { type: 'new', orderId });
+            io.emit('stock_update', { items: items.map(i => i.id) });
+        }
+
         res.status(201).json({ success: true, orderId, message: 'Order created successfully' });
     } catch (err) {
         await connection.rollback();
@@ -95,6 +103,11 @@ exports.updateOrderStatus = async (req, res) => {
     const { status, payment_status } = req.body;
     try {
         await db.execute('UPDATE orders SET status = ?, payment_status = ? WHERE id = ?', [status, payment_status, id]);
+        
+        // Emit Real-time Update
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'status', orderId: id, status, payment_status });
+
         res.json({ success: true, message: 'Order status updated' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });

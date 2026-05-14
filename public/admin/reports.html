@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Business Reports | TABARUQ Foods</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="../css/style.css?v=4">
+    <link rel="stylesheet" href="../css/style.css?v=5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -14,14 +14,13 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
-                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
-                <li><a href="inventory.html"></a></li><li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li><li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html" class="active"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
                 <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
-                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
@@ -111,12 +110,12 @@
                         <thead>
                             <tr>
                                 <th>Order ID</th>
-                                <th>Customer</th>
-                                <th>Date & Time</th>
+                                <th>Cashier</th>
+                                <th>Items Sold</th>
                                 <th>Amount</th>
                                 <th>Method</th>
-                                <th>Status</th>
-                                <th>Cashier</th>
+                                <th>Customer</th>
+                                <th>Date & Time</th>
                             </tr>
                         </thead>
                         <tbody id="transactionHistoryBody"></tbody>
@@ -126,7 +125,7 @@
         </main>
     </div>
 
-    <script src="../js/api.js"></script>
+    <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
@@ -184,12 +183,12 @@
                 document.getElementById('transactionHistoryBody').innerHTML = historyResp.data.map(t => `
                     <tr>
                         <td>#${t.id}</td>
+                        <td><span class="badge" style="background: var(--primary);">${t.cashier_name}</span></td>
+                        <td style="font-size: 0.85rem; max-width: 300px;">${t.items_list || '—'}</td>
+                        <td style="font-weight: 700;">${formatCurrency(t.total_amount)}</td>
+                        <td><span class="badge" style="background: ${t.payment_method === 'Cash' ? 'rgba(255,255,255,0.1)' : 'var(--accent-success)'}; white-space: nowrap;">${t.payment_method || 'M-Pesa'}</span></td>
                         <td>${t.customer_name || 'Guest'}</td>
-                        <td>${new Date(t.created_at).toLocaleString()}</td>
-                        <td>${formatCurrency(t.total_amount)}</td>
-                        <td><span class="badge" style="background: ${t.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'}; white-space: nowrap;">${t.payment_method || 'M-Pesa'}</span></td>
-                        <td><span style="color: ${t.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${t.status}</span></td>
-                        <td>${t.cashier_name}</td>
+                        <td style="font-size: 0.8rem;">${new Date(t.created_at).toLocaleString()}</td>
                     </tr>
                 `).join('');
 
@@ -247,3 +246,4 @@
     </script>
 </body>
 </html>
+

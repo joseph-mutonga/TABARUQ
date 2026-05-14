@@ -262,6 +262,10 @@ exports.mpesaCallback = async (req, res) => {
             }
         }
 
+        // Emit Real-time Update
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'payment', checkoutID });
+
         return acknowledge();
     } catch (err) {
         console.error('Callback Error:', err);
@@ -355,6 +359,10 @@ exports.mpesaC2BConfirmation = async (req, res) => {
             }
 
             await conn.commit();
+            
+            // Emit Real-time Update
+            const io = req.app.get('io');
+            if (io) io.emit('order_update', { type: 'payment', transID: TransID });
         } catch (e) {
             await conn.rollback();
             throw e;
@@ -388,6 +396,10 @@ exports.confirmPayment = async (req, res) => {
             'UPDATE orders SET payment_status = ?, status = ? WHERE id = ?',
             ['paid', 'completed', orderId]
         );
+
+        // Emit Real-time Update
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'confirm', paymentId, orderId });
 
         res.json({ success: true, message: 'Payment linked and confirmed successfully' });
     } catch (err) {
@@ -438,6 +450,10 @@ exports.processCashPayment = async (req, res) => {
             'UPDATE orders SET payment_status = ?, status = ? WHERE id = ?',
             ['paid', 'completed', orderId]
         );
+
+        // Emit Real-time Update
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'cash', orderId });
 
         res.json({ success: true, message: 'Cash payment processed successfully' });
     } catch (err) {

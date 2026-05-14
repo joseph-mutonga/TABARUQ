@@ -22,6 +22,9 @@ exports.addItem = async (req, res) => {
             [result.insertId, req.user.id, quantity || 0, 'Initial Stock']
         );
 
+        const io = req.app.get('io');
+        if (io) io.emit('stock_update', { items: [result.insertId] });
+
         res.status(201).json({ success: true, message: 'Item added successfully' });
     } catch (err) {
         console.error(err);
@@ -37,6 +40,10 @@ exports.updateItem = async (req, res) => {
             'UPDATE inventory SET name=?, category=?, cost_price=?, selling_price=?, unit=? WHERE id=?',
             [name, category, cost_price, selling_price, unit, id]
         );
+
+        const io = req.app.get('io');
+        if (io) io.emit('stock_update', { items: [id] });
+
         res.json({ success: true, message: 'Item updated' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -47,6 +54,10 @@ exports.deleteItem = async (req, res) => {
     const { id } = req.params;
     try {
         await db.execute('DELETE FROM inventory WHERE id = ?', [id]);
+
+        const io = req.app.get('io');
+        if (io) io.emit('stock_update', { type: 'delete', items: [id] });
+
         res.json({ success: true, message: 'Item deleted' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -66,6 +77,9 @@ exports.restockItem = async (req, res) => {
             'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
             [id, req.user.id, quantity, reason || 'Restock']
         );
+
+        const io = req.app.get('io');
+        if (io) io.emit('stock_update', { items: [id] });
 
         res.json({ success: true, message: 'Stock updated successfully' });
     } catch (err) {

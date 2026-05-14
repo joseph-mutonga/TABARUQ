@@ -69,7 +69,11 @@ exports.getTransactionHistory = async (req, res) => {
     }
     try {
         const [rows] = await db.execute(`
-            SELECT o.*, o.customer_name, u.username as cashier_name, p.payment_method, p.transaction_id
+            SELECT o.*, o.customer_name, u.username as cashier_name, p.payment_method, p.transaction_id,
+                   (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', i.name) SEPARATOR ', ') 
+                    FROM order_items oi 
+                    JOIN inventory i ON oi.item_id = i.id 
+                    WHERE oi.order_id = o.id) as items_list
             FROM orders o
             JOIN users u ON o.cashier_id = u.id
             LEFT JOIN (SELECT order_id, MIN(payment_method) as payment_method, MIN(transaction_id) as transaction_id FROM payments GROUP BY order_id) p ON o.id = p.order_id
