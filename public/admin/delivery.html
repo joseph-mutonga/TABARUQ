@@ -12,26 +12,20 @@
     <div class="layout">
         <aside class="sidebar">
             <h2>TABARUQ</h2>
-            <ul class="nav-links">
-                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
-                <li><a href="delivery.html" class="active"><i class="fas fa-truck"></i> Delivery Module</a></li>
-                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
-                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
-                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
-                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
-                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
-                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            <ul class="nav-links" id="sidebarLinks">
+                <!-- Populated dynamically based on role -->
             </ul>
         </aside>
 
         <main class="container">
             <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
                 <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Delivery Reconciliation</h1>
-                <button class="btn" style="background:var(--accent-magenta); color:white;" onclick="simulateWebhook()"><i class="fas fa-vial"></i> Test Order Webhook</button>
+                <div style="display:flex; gap:1rem;">
+                    <button class="btn btn-success" onclick="openManualOrderModal()" style="background:var(--accent-success)"><i class="fas fa-plus-circle"></i> Record Outgoing Food</button>
+                </div>
             </header>
 
-            <div class="stats-grid">
+            <div class="stats-grid" id="financialStatsGrid">
                 <div class="stat-card">
                     <div style="font-size:0.9rem; color:var(--text-gray);">Pending Settlements</div>
                     <div class="stat-value" id="pendingRevenue" style="color:var(--accent-warning)">KES 0</div>
@@ -40,13 +34,27 @@
                     <div style="font-size:0.9rem; color:var(--text-gray);">Net Revenue (After Fees)</div>
                     <div class="stat-value" id="totalNetRevenue" style="color:var(--accent-success)">KES 0</div>
                 </div>
-                <div class="stat-card">
-                    <div style="font-size:0.9rem; color:var(--text-gray);">Total Commission Paid</div>
-                    <div class="stat-value" id="totalFees" style="color:var(--accent-danger)">KES 0</div>
+            </div>
+
+            <div class="stats-grid" style="margin-top:1rem; grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-card" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);">
+                    <div style="font-size:0.8rem; color:var(--text-gray);">Today's Delivery</div>
+                    <div id="statsDaily" style="font-size:1.5rem; font-weight:800; color:#fff;">KES 0</div>
+                    <div id="statsDailyCount" style="font-size:0.75rem; color:var(--text-gray);">0 orders</div>
+                </div>
+                <div class="stat-card" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2);">
+                    <div style="font-size:0.8rem; color:var(--text-gray);">This Week</div>
+                    <div id="statsWeekly" style="font-size:1.5rem; font-weight:800; color:#fff;">KES 0</div>
+                    <div id="statsWeeklyCount" style="font-size:0.75rem; color:var(--text-gray);">0 orders</div>
+                </div>
+                <div class="stat-card" style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.2);">
+                    <div style="font-size:0.8rem; color:var(--text-gray);">This Month</div>
+                    <div id="statsMonthly" style="font-size:1.5rem; font-weight:800; color:#fff;">KES 0</div>
+                    <div id="statsMonthlyCount" style="font-size:0.75rem; color:var(--text-gray);">0 orders</div>
                 </div>
             </div>
 
-            <div class="glass-card" style="margin-top:2rem;">
+            <div class="glass-card" style="margin-top:2rem;" id="reconciliationCard">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
                     <h3>Platform Reconciliation Report</h3>
                     <button class="btn btn-primary" onclick="openSettlementModal()"><i class="fas fa-plus"></i> Record Settlement</button>
@@ -65,6 +73,52 @@
                             </tr>
                         </thead>
                         <tbody id="reconciliationBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-top:2rem;" id="deliveryMenuCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <div>
+                        <h3>Delivery Menu Management</h3>
+                        <p class="card-small" style="color:var(--text-gray);">Manage platform-specific prices for delivery items.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openDeliveryItemModal()"><i class="fas fa-plus"></i> Add Delivery Item</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item Name</th>
+                                <th>Category</th>
+                                <th>Platform Restriction</th>
+                                <th>Uber Price</th>
+                                <th>Glovo Price</th>
+                                <th>Bolt Price</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deliveryMenuBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-top:2rem;">
+                <h3>Delivery Order History</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Platform</th>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Payment</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -115,6 +169,118 @@
         </div>
     </div>
 
+    <!-- Manual Outgoing Order Modal -->
+    <div id="manualOrderModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:800px; width:100%; max-height:90vh; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
+            <h2 style="color:#fff; margin-bottom:1rem;">Record Outgoing Food (Manual)</h2>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                <div class="form-group">
+                    <label>Platform</label>
+                    <select id="mPlatform" class="form-control" onchange="refreshManualMenu()">
+                        <option value="Uber Eats">Uber Eats</option>
+                        <option value="Glovo">Glovo</option>
+                        <option value="Bolt Food">Bolt Food</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Platform Order ID</label>
+                    <input type="text" id="mPlatformId" class="form-control" placeholder="e.g. #778899">
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 300px; gap:1rem; flex:1; min-height:0;">
+                <!-- Item Selector -->
+                <div style="display:flex; flex-direction:column;">
+                    <input type="text" id="mItemSearch" class="form-control" placeholder="Search menu items..." oninput="refreshManualMenu()" style="margin-bottom:0.5rem;">
+                    <div id="mMenuList" style="flex:1; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:0.5rem;"></div>
+                </div>
+
+                <!-- Selected Items (Cart) -->
+                <div style="display:flex; flex-direction:column; border-left:1px solid rgba(255,255,255,0.1); padding-left:1rem;">
+                    <h4 style="color:var(--text-gray); margin-bottom:0.5rem;">Selected Items</h4>
+                    <div id="mCartList" style="flex:1; overflow-y:auto; margin-bottom:1rem;"></div>
+                    <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:1rem;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:1rem;">
+                            <span>Total</span>
+                            <strong id="mTotal">KES 0</strong>
+                        </div>
+                        <button class="btn btn-primary" style="width:100%;" onclick="saveManualOrder()">Record Order</button>
+                        <button class="btn" style="width:100%; background:var(--text-gray); margin-top:0.5rem;" onclick="closeManualOrderModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Delivery Item Modal -->
+    <div id="deliveryItemModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:550px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
+            <h2 id="deliveryItemModalTitle" style="color:#fff; margin-bottom:1.5rem;">Add Delivery Food Item</h2>
+            <form id="deliveryItemForm">
+                <input type="hidden" id="diId">
+                <div class="form-group">
+                    <label>Item Name</label>
+                    <input type="text" id="diName" class="form-control" placeholder="e.g. Uber Special Burger" required>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="diCategory" class="form-control" list="deliveryCategoryList" placeholder="e.g. Soft Drinks" required>
+                        <datalist id="deliveryCategoryList"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Stock (Quantity)</label>
+                        <input type="number" id="diQty" class="form-control" value="100" required>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label>Cost Price (KES)</label>
+                        <input type="number" id="diCost" class="form-control" step="0.01" placeholder="e.g. 200" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Normal Selling Price (KES)</label>
+                        <input type="number" id="diSelling" class="form-control" step="0.01" placeholder="e.g. 350" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Platform Restriction</label>
+                    <select id="diPlatform" class="form-control" onchange="togglePlatformPriceFields()">
+                        <option value="">All Platforms</option>
+                        <option value="Uber Eats">Uber Eats Only</option>
+                        <option value="Glovo">Glovo Only</option>
+                        <option value="Bolt Food">Bolt Food Only</option>
+                    </select>
+                </div>
+
+                <div id="diPricesContainer" style="margin-top: 1rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                    <label style="color: var(--accent-magenta); font-weight: 700; margin-bottom: 0.5rem; display: block;">Delivery Prices (KES)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+                        <div class="form-group" id="diUberPriceGroup">
+                            <label style="font-size: 0.7rem;">Uber Price</label>
+                            <input type="number" id="diUberPrice" class="form-control" step="0.01" placeholder="e.g. 400">
+                        </div>
+                        <div class="form-group" id="diGlovoPriceGroup">
+                            <label style="font-size: 0.7rem;">Glovo Price</label>
+                            <input type="number" id="diGlovoPrice" class="form-control" step="0.01" placeholder="e.g. 400">
+                        </div>
+                        <div class="form-group" id="diBoltPriceGroup">
+                            <label style="font-size: 0.7rem;">Bolt Price</label>
+                            <input type="number" id="diBoltPrice" class="form-control" step="0.01" placeholder="e.g. 400">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:1rem; margin-top:2rem;">
+                    <button type="button" class="btn" style="flex:1; background:#475569;" onclick="closeDeliveryItemModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="flex:1;">Save Food Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         let __pendingOrders = [];
@@ -148,8 +314,225 @@
 
                 document.getElementById('pendingRevenue').textContent = formatCurrency(totalPending);
                 document.getElementById('totalNetRevenue').textContent = formatCurrency(totalNet);
-                document.getElementById('totalFees').textContent = formatCurrency(totalFees);
             } catch (err) { console.error(err); }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await apiFetch('/delivery/reports/stats');
+                const s = res.data;
+                document.getElementById('statsDaily').textContent = formatCurrency(s.daily.total);
+                document.getElementById('statsDailyCount').textContent = `${s.daily.count} orders`;
+                document.getElementById('statsWeekly').textContent = formatCurrency(s.weekly.total);
+                document.getElementById('statsWeeklyCount').textContent = `${s.weekly.count} orders`;
+                document.getElementById('statsMonthly').textContent = formatCurrency(s.monthly.total);
+                document.getElementById('statsMonthlyCount').textContent = `${s.monthly.count} orders`;
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await apiFetch('/delivery/orders');
+                const data = res.data;
+                document.getElementById('historyBody').innerHTML = data.map(o => `
+                    <tr>
+                        <td style="font-size:0.85rem;">${new Date(o.created_at).toLocaleString()}</td>
+                        <td><span class="badge" style="background:var(--accent-magenta)">${o.platform}</span></td>
+                        <td><strong>${o.platform_order_id || '-'}</strong></td>
+                        <td>${o.customer_name}</td>
+                        <td style="font-weight:700;">${formatCurrency(o.total_amount)}</td>
+                        <td><span class="badge" style="background:${o.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${o.status}</span></td>
+                        <td><span class="badge" style="background:${o.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${o.payment_status}</span></td>
+                    </tr>
+                `).join('');
+            } catch (err) { console.error(err); }
+        }
+
+        let __deliveryItems = [];
+ 
+        async function loadDeliveryMenu() {
+            try {
+                const res = await apiFetch('/inventory');
+                const allItems = res.data;
+                __deliveryItems = allItems.filter(i => i.is_delivery == 1);
+                
+                // Populate category autocomplete list dynamically for delivery items
+                const categories = [...new Set(allItems.map(item => item.category).filter(Boolean))];
+                const defaultCategories = ['Soft Drinks', 'Hot Drinks', 'Fresh Juices', 'Milkshakes', 'Beers', 'Wines', 'Cocktails', 'Spirits', 'Main Course', 'Sides', 'Desserts', 'Fast Food'];
+                const allSuggestedCategories = [...new Set([...defaultCategories, ...categories])];
+                
+                const datalist = document.getElementById('deliveryCategoryList');
+                if (datalist) {
+                    datalist.innerHTML = allSuggestedCategories.map(cat => `<option value="${cat}"></option>`).join('');
+                }
+                
+                document.getElementById('deliveryMenuBody').innerHTML = __deliveryItems.map(i => {
+                    const platform = i.delivery_platform || 'All Platforms';
+                    const isUberDisabled = i.delivery_platform && i.delivery_platform !== 'Uber Eats' ? 'disabled' : '';
+                    const isGlovoDisabled = i.delivery_platform && i.delivery_platform !== 'Glovo' ? 'disabled' : '';
+                    const isBoltDisabled = i.delivery_platform && i.delivery_platform !== 'Bolt Food' ? 'disabled' : '';
+
+                    return `
+                        <tr>
+                            <td><strong>${i.name}</strong></td>
+                            <td style="font-size:0.85rem;">${i.category}</td>
+                            <td><span class="badge" style="background:${i.delivery_platform ? 'var(--accent-magenta)' : 'var(--accent-success)'}">${platform}</span></td>
+                            <td><input type="number" class="form-control" style="width:100px; font-size:0.8rem;" value="${i.uber_price || 0}" id="up-${i.id}" ${isUberDisabled}></td>
+                            <td><input type="number" class="form-control" style="width:100px; font-size:0.8rem;" value="${i.glovo_price || 0}" id="gp-${i.id}" ${isGlovoDisabled}></td>
+                            <td><input type="number" class="form-control" style="width:100px; font-size:0.8rem;" value="${i.bolt_price || 0}" id="bp-${i.id}" ${isBoltDisabled}></td>
+                            <td>
+                                <div style="display:flex; gap:0.25rem;">
+                                    <button class="btn btn-primary" style="padding:0.3rem 0.6rem; font-size:0.75rem;" onclick="updatePlatformPrice(${i.id})" title="Update Prices"><i class="fas fa-save"></i></button>
+                                    <button class="btn" style="padding:0.3rem 0.6rem; font-size:0.75rem; background:var(--primary);" onclick="editDeliveryItem(${i.id})" title="Edit Item"><i class="fas fa-edit"></i></button>
+                                    <button class="btn" style="padding:0.3rem 0.6rem; font-size:0.75rem; background:var(--accent-danger);" onclick="deleteDeliveryItem(${i.id})" title="Delete Item"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) { console.error(err); }
+        }
+
+        async function updatePlatformPrice(id) {
+            const up = document.getElementById(`up-${id}`).value;
+            const gp = document.getElementById(`gp-${id}`).value;
+            const bp = document.getElementById(`bp-${id}`).value;
+            
+            try {
+                // Get full item data first to avoid overwriting other fields
+                const itemsRes = await apiFetch('/inventory');
+                const item = itemsRes.data.find(i => i.id === id);
+                
+                await apiFetch(`/inventory/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        ...item,
+                        uber_price: up ? parseFloat(up) : null,
+                        glovo_price: gp ? parseFloat(gp) : null,
+                        bolt_price: bp ? parseFloat(bp) : null
+                    })
+                });
+                alert('Prices updated!');
+                loadDeliveryMenu();
+            } catch (err) { alert(err.message); }
+        }
+
+        // New modal handlers
+        function openDeliveryItemModal(item = null) {
+            document.getElementById('deliveryItemModal').style.display = 'flex';
+            if (item) {
+                document.getElementById('deliveryItemModalTitle').textContent = 'Edit Delivery Food Item';
+                document.getElementById('diId').value = item.id;
+                document.getElementById('diName').value = item.name;
+                document.getElementById('diCategory').value = item.category;
+                document.getElementById('diQty').value = item.quantity || 100;
+                document.getElementById('diCost').value = item.cost_price;
+                document.getElementById('diSelling').value = item.selling_price;
+                document.getElementById('diPlatform').value = item.delivery_platform || '';
+                document.getElementById('diUberPrice').value = item.uber_price || '';
+                document.getElementById('diGlovoPrice').value = item.glovo_price || '';
+                document.getElementById('diBoltPrice').value = item.bolt_price || '';
+            } else {
+                document.getElementById('deliveryItemModalTitle').textContent = 'Add Delivery Food Item';
+                document.getElementById('deliveryItemForm').reset();
+                document.getElementById('diId').value = '';
+                document.getElementById('diQty').value = '100';
+            }
+            togglePlatformPriceFields();
+        }
+
+        function closeDeliveryItemModal() {
+            document.getElementById('deliveryItemModal').style.display = 'none';
+        }
+
+        function togglePlatformPriceFields() {
+            const platform = document.getElementById('diPlatform').value;
+            const uberGrp = document.getElementById('diUberPriceGroup');
+            const glovoGrp = document.getElementById('diGlovoPriceGroup');
+            const boltGrp = document.getElementById('diBoltPriceGroup');
+
+            const uberInput = document.getElementById('diUberPrice');
+            const glovoInput = document.getElementById('diGlovoPrice');
+            const boltInput = document.getElementById('diBoltPrice');
+
+            // Reset transitions and display
+            uberGrp.style.opacity = '1';
+            glovoGrp.style.opacity = '1';
+            boltGrp.style.opacity = '1';
+            uberInput.disabled = false;
+            glovoInput.disabled = false;
+            boltInput.disabled = false;
+
+            if (platform === 'Uber Eats') {
+                glovoGrp.style.opacity = '0.3';
+                boltGrp.style.opacity = '0.3';
+                glovoInput.disabled = true;
+                boltInput.disabled = true;
+                glovoInput.value = '';
+                boltInput.value = '';
+            } else if (platform === 'Glovo') {
+                uberGrp.style.opacity = '0.3';
+                boltGrp.style.opacity = '0.3';
+                uberInput.disabled = true;
+                boltInput.disabled = true;
+                uberInput.value = '';
+                boltInput.value = '';
+            } else if (platform === 'Bolt Food') {
+                uberGrp.style.opacity = '0.3';
+                glovoGrp.style.opacity = '0.3';
+                uberInput.disabled = true;
+                glovoInput.disabled = true;
+                uberInput.value = '';
+                glovoInput.value = '';
+            }
+        }
+
+        document.getElementById('deliveryItemForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('diId').value;
+            const data = {
+                name: document.getElementById('diName').value,
+                item_type: 'saleable',
+                category: document.getElementById('diCategory').value,
+                unit: 'pcs',
+                quantity: parseFloat(document.getElementById('diQty').value || 100),
+                cost_price: parseFloat(document.getElementById('diCost').value),
+                selling_price: parseFloat(document.getElementById('diSelling').value || 0),
+                uber_price: document.getElementById('diUberPrice').value ? parseFloat(document.getElementById('diUberPrice').value) : null,
+                glovo_price: document.getElementById('diGlovoPrice').value ? parseFloat(document.getElementById('diGlovoPrice').value) : null,
+                bolt_price: document.getElementById('diBoltPrice').value ? parseFloat(document.getElementById('diBoltPrice').value) : null,
+                delivery_platform: document.getElementById('diPlatform').value || null,
+                is_delivery: true
+            };
+
+            try {
+                if (id) {
+                    await apiFetch(`/inventory/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                    alert('Delivery item updated!');
+                } else {
+                    await apiFetch('/inventory', { method: 'POST', body: JSON.stringify(data) });
+                    alert('Delivery item added!');
+                }
+                closeDeliveryItemModal();
+                loadDeliveryMenu();
+            } catch (err) { alert(err.message); }
+        };
+
+        function editDeliveryItem(id) {
+            const item = __deliveryItems.find(i => i.id === id);
+            if (item) {
+                openDeliveryItemModal(item);
+            }
+        }
+
+        async function deleteDeliveryItem(id) {
+            if (confirm('Are you sure you want to delete this delivery food item?')) {
+                try {
+                    await apiFetch(`/inventory/${id}`, { method: 'DELETE' });
+                    alert('Item deleted successfully!');
+                    loadDeliveryMenu();
+                } catch (err) { alert(err.message); }
+            }
         }
 
         async function loadPendingOrders() {
@@ -213,35 +596,179 @@
             } catch (err) { alert(err.message); }
         };
 
-        async function simulateWebhook() {
-            const platform = ["Uber Eats", "Bolt Food", "Glovo"][Math.floor(Math.random() * 3)];
-            const orderId = "TEST-" + Math.floor(1000 + Math.random() * 9000);
-            const total = Math.floor(500 + Math.random() * 2000);
-            
-            const payload = {
-                platform,
-                order_id: orderId,
-                customer_name: "Test Customer",
-                total,
-                items: [{ name: "Swahili Special", quantity: 1, price: total }],
-                fees: [{ type: "commission", percentage: 25, amount: total * 0.25 }]
-            };
-
-            try {
-                await apiFetch('/delivery/webhook', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-                alert(`Test Order (${orderId}) sent! Check the Kitchen Display.`);
-                loadReconciliation();
-            } catch (err) { alert("Simulation failed: " + err.message); }
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || (user.role !== 'admin' && user.role !== 'cashier')) {
+            window.location.href = '../index.html';
         }
 
-        const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+        // Render dynamic sidebar
+        const sidebarLinks = document.getElementById('sidebarLinks');
+        if (user.role === 'admin') {
+            sidebarLinks.innerHTML = `
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
+                <li><a href="delivery.html" class="active"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
+                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            `;
+        } else {
+            // Cashier role
+            sidebarLinks.innerHTML = `
+                <li><a href="../cashier/index.html"><i class="fas fa-plus-circle"></i> New Order</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-history"></i> Orders & Payments</a></li>
+                <li><a href="delivery.html" class="active"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            `;
+        }
+
+        // Bind logout click
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+        }
+
+        // Role-based elements toggle (hiding complex financial management tools for cashiers)
+        if (user.role === 'cashier') {
+            const financialGrid = document.getElementById('financialStatsGrid');
+            if (financialGrid) financialGrid.style.display = 'none';
+
+            const reconCard = document.getElementById('reconciliationCard');
+            if (reconCard) reconCard.style.display = 'none';
+
+            const menuCard = document.getElementById('deliveryMenuCard');
+            if (menuCard) menuCard.style.display = 'none';
+        }
+
+        let __inventory = [];
+        let __mCart = [];
+
+        async function openManualOrderModal() {
+            document.getElementById('manualOrderModal').style.display = 'flex';
+            const res = await apiFetch('/inventory');
+            __inventory = res.data.filter(i => i.is_delivery == 1);
+            
+            __mCart = [];
+            document.getElementById('mPlatformId').value = '';
+            refreshManualMenu();
+            renderManualCart();
+        }
+
+        function closeManualOrderModal() {
+            document.getElementById('manualOrderModal').style.display = 'none';
+        }
+
+        function refreshManualMenu() {
+            const query = document.getElementById('mItemSearch').value.toLowerCase();
+            const platform = document.getElementById('mPlatform').value;
+            const menuEl = document.getElementById('mMenuList');
+            
+            const filtered = __inventory.filter(i => {
+                const matchesSearch = i.name.toLowerCase().includes(query);
+                const matchesPlatform = !i.delivery_platform || i.delivery_platform === platform;
+                return matchesSearch && matchesPlatform;
+            });
+            
+            menuEl.innerHTML = filtered.map(item => {
+                let price = Number(item.selling_price);
+                if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
+                if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
+                if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+
+                return `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem; background:rgba(255,255,255,0.05); margin-bottom:0.5rem; border-radius:4px; cursor:pointer;" onclick="addToManualCart(${item.id})">
+                        <div>
+                            <div style="font-weight:600;">${item.name}</div>
+                            <div style="font-size:0.75rem; color:var(--text-gray);">${item.category}</div>
+                        </div>
+                        <div style="font-weight:700;">${formatCurrency(price)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addToManualCart(id) {
+            const item = __inventory.find(i => i.id === id);
+            const cartItem = __mCart.find(c => c.id === id);
+            if (cartItem) {
+                cartItem.quantity++;
+            } else {
+                __mCart.push({ ...item, quantity: 1 });
+            }
+            renderManualCart();
+        }
+
+        function renderManualCart() {
+            const platform = document.getElementById('mPlatform').value;
+            const cartEl = document.getElementById('mCartList');
+            let total = 0;
+
+            cartEl.innerHTML = __mCart.map((item, index) => {
+                let price = Number(item.selling_price);
+                if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
+                if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
+                if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+
+                total += price * item.quantity;
+                return `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; font-size:0.85rem;">
+                        <div>
+                            <div>${item.name}</div>
+                            <div style="color:var(--text-gray)">${formatCurrency(price)} x ${item.quantity}</div>
+                        </div>
+                        <button onclick="removeFromManualCart(${index})" style="background:none; border:none; color:var(--accent-danger); cursor:pointer;"><i class="fas fa-times"></i></button>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('mTotal').textContent = formatCurrency(total);
+        }
+
+        function removeFromManualCart(index) {
+            __mCart.splice(index, 1);
+            renderManualCart();
+        }
+
+        async function saveManualOrder() {
+            if (__mCart.length === 0) return alert('Select items first');
+            
+            const platform = document.getElementById('mPlatform').value;
+            const platform_order_id = document.getElementById('mPlatformId').value;
+            
+            const total = __mCart.reduce((acc, item) => {
+                let price = Number(item.selling_price);
+                if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
+                if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
+                if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                return acc + (price * item.quantity);
+            }, 0);
+
+            try {
+                const res = await apiFetch('/orders', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        items: __mCart,
+                        total_amount: total,
+                        platform: platform,
+                        platform_order_id: platform_order_id,
+                        customer_name: `${platform} Order`
+                    })
+                });
+                alert('Order recorded successfully!');
+                closeManualOrderModal();
+                loadReconciliation();
+            } catch (err) { alert("Server Error: " + err.message); }
+        }
 
         loadReconciliation();
-        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+        loadStats();
+        loadHistory();
+        loadDeliveryMenu();
     </script>
 </body>
 </html>

@@ -15,6 +15,7 @@
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-plus-circle"></i> New Order</a></li>
                 <li id="ordersNavLink" style="display:none;"><a href="orders.html" class="active"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li id="deliveryNavLink" style="display:none;"><a href="../admin/delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
@@ -25,11 +26,16 @@
             <p style="color: #ffffff; margin-bottom: 0.75rem; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">When Safaricom sends an M-Pesa callback, the payer name, amount, and message are saved here. Click a row to view the full callback text. Confirmed STK payments complete the order automatically.</p>
             <p class="card-small" style="color: rgba(255,255,255,0.85); margin-bottom: 1.5rem;">This list refreshes every few seconds so new callbacks appear without reloading the page.</p>
 
+            <div style="margin-bottom: 1rem; display: flex; gap: 1rem;">
+                <button id="combineBtn" class="btn" style="background: var(--accent-warning); display: none;" onclick="combineSelectedOrders()"><i class="fas fa-layer-group"></i> Combine Selected Bills</button>
+            </div>
+
             <div class="glass-card">
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
+                                <th onclick="event.stopPropagation();"><input type="checkbox" id="selectAllOrders" onclick="event.stopPropagation(); toggleSelectAll()"></th>
                                 <th>Order ID</th>
                                 <th>Customer Name</th>
                                 <th>Amount</th>
@@ -48,12 +54,50 @@
         </main>
     </div>
 
-    <div id="paymentDetailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
-        <div class="glass-card" style="max-width:520px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
-            <h2 style="color:#fff; margin-bottom:1rem; font-size:1.15rem;">Payment &amp; M-Pesa callback</h2>
-            <dl id="paymentDetailDl" style="color:rgba(255,255,255,0.92); font-size:0.95rem; line-height:1.6; margin:0;"></dl>
-            <div id="paymentDetailActions" style="margin-top:1.25rem; display:flex; flex-wrap:wrap; gap:0.5rem;"></div>
-            <button type="button" class="btn" style="margin-top:1rem; background:#64748b; color:#fff;" onclick="closePaymentDetail()">Close</button>
+
+    <div id="paymentDetailModal" class="premium-modal-backdrop">
+        <div class="premium-modal" onclick="event.stopPropagation()">
+            <div class="premium-modal-header">
+                <button type="button" class="premium-modal-close" onclick="closePaymentDetail()">&times;</button>
+                <h2>Payment Details</h2>
+                <div id="modalPaymentRef" class="ref-no">REF: #000000</div>
+            </div>
+            <div class="premium-modal-body">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Order:</label>
+                        <span id="modalOrderRef">--</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Customer:</label>
+                        <span id="modalCustomerName">--</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Amount:</label>
+                        <span id="modalAmount">KES 0.00</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Method:</label>
+                        <span id="modalMethod">--</span>
+                    </div>
+                    <div class="info-item" style="grid-column: span 2;">
+                        <label>M-Pesa Receipt:</label>
+                        <span id="modalReceipt">--</span>
+                    </div>
+                    <div class="info-item" style="grid-column: span 2;">
+                        <label>Message/Callback:</label>
+                        <div id="modalMessage" style="font-size: 0.85rem; color: #64748b; line-height: 1.4; max-height: 100px; overflow-y: auto;">--</div>
+                    </div>
+                </div>
+
+                <div id="paymentDetailActions" style="margin-top:1.25rem; display:flex; flex-wrap:wrap; gap:0.5rem; position: relative; z-index: 1;"></div>
+                <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                    <button class="btn" style="width: 100%; background: #1e293b;" onclick="printOrder()"><i class="fas fa-print"></i> Print Receipt / Bill</button>
+                </div>
+            </div>
+            <div class="premium-modal-footer">
+                <button type="button" class="btn-close-premium" style="background: #64748b;" onclick="closePaymentDetail()">Close</button>
+            </div>
         </div>
     </div>
 
@@ -93,9 +137,52 @@
         .incoming-row { cursor: pointer; border-radius: 0.75rem; padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; background: rgba(255,255,255,0.06); border: 2px solid transparent; transition: background 0.15s, border-color 0.15s; }
         .incoming-row:hover { background: rgba(255,255,255,0.1); }
         .incoming-row--sel { border-color: rgba(52, 211, 153, 0.9); background: rgba(16, 185, 129, 0.14); }
+        
+        /* Make checkboxes larger and touch-friendly */
+        .order-checkbox, #selectAllOrders {
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            accent-color: #10b981; /* Premium green accent */
+            border-radius: 6px;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(15, 23, 42, 0.6);
+            vertical-align: middle;
+            transition: transform 0.1s ease, filter 0.15s ease;
+        }
+        .order-checkbox:active, #selectAllOrders:active {
+            transform: scale(0.88);
+        }
+        .order-checkbox:hover, #selectAllOrders:hover {
+            filter: brightness(1.1);
+        }
+        
+        /* Make the Orders & Payments section scrollable */
+        .table-container {
+            max-height: 70vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .table-container table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #0f172a; /* Solid background for sticky header */
+        }
+        
+        /* Align and pad the selection column cell */
+        .table-container table td:first-child, 
+        .table-container table th:first-child {
+            width: 60px !important;
+            min-width: 60px !important;
+            text-align: center !important;
+            padding: 10px 6px !important;
+            vertical-align: middle !important;
+        }
     </style>
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
+        const user = JSON.parse(localStorage.getItem('user'));
         let __selectedPaymentId = null;
         let __detailModalOpen = false;
         let __incomingModalOpen = false;
@@ -109,35 +196,24 @@
             document.getElementById('paymentDetailModal').style.display = 'none';
         }
 
+
         function showPaymentDetail(p) {
             __detailModalOpen = true;
-            const dl = document.getElementById('paymentDetailDl');
             const actions = document.getElementById('paymentDetailActions');
             function esc(s) {
                 const d = document.createElement('div');
                 d.textContent = s == null ? '' : String(s);
                 return d.innerHTML;
             }
-            const rows = [
-                ['Order', p.order_id ? `#${p.order_id}` : 'Unlinked'],
-                ['Amount (recorded)', formatCurrency(p.amount)],
-                ['Customer / payer name', p.customer_name || '—'],
-                ['Payment phone', p.phone_number || '—'],
-                ['M-Pesa receipt', p.transaction_id || '—'],
-                ['Method', p.payment_method || '—'],
-                ['Status', p.status],
-                ['Confirmed at', p.confirmed_at ? new Date(p.confirmed_at).toLocaleString() : '—'],
-                ['Confirmed by', p.confirmed_by_user || (p.confirmed_by ? `User #${p.confirmed_by}` : '—')],
-                ['Callback / full message', p.mpesa_result_message || '—'],
-            ];
-            dl.innerHTML = rows
-                .map(
-                    ([k, v]) =>
-                        `<div style="margin-bottom:0.75rem"><dt style="font-weight:700;color:rgba(255,255,255,0.75);font-size:0.8rem;text-transform:uppercase;">${esc(
-                            k
-                        )}</dt><dd style="margin:0.25rem 0 0 0;word-break:break-word;">${esc(v)}</dd></div>`
-                )
-                .join('');
+
+            // Populate premium modal fields
+            document.getElementById('modalPaymentRef').textContent = `REF: #${p.id}`;
+            document.getElementById('modalOrderRef').textContent = p.order_id ? `#${p.order_id}` : 'Unlinked';
+            document.getElementById('modalAmount').textContent = formatCurrency(p.amount);
+            document.getElementById('modalCustomerName').textContent = p.customer_name || '—';
+            document.getElementById('modalMethod').textContent = p.payment_method || '—';
+            document.getElementById('modalReceipt').textContent = p.transaction_id || '—';
+            document.getElementById('modalMessage').textContent = p.mpesa_result_message || '—';
 
             const orderTotal = p.total_amount != null ? Number(p.total_amount) : Number(p.amount);
             const canOffline =
@@ -147,16 +223,16 @@
                 (p.status === 'failed' || (p.status === 'pending' && !p.transaction_id));
             let actionHtml = '';
             if (p.status === 'pending' && p.transaction_id) {
-                actionHtml += `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();closePaymentDetail();confirmPayment(${p.id}, ${
+                actionHtml += `<button type="button" class="btn-close-premium" style="background: var(--primary); font-size: 0.95rem; padding: 0.8rem;" onclick="event.stopPropagation();closePaymentDetail();confirmPayment(${p.id}, ${
                     p.order_id || 'null'
                 })">Confirm &amp; complete order</button>`;
             }
             if (canOffline) {
-                actionHtml += `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();closePaymentDetail();openIncomingMpesaModal(${p.order_id}, ${orderTotal})">Record offline M-Pesa</button>`;
+                actionHtml += `<button type="button" class="btn-close-premium" style="background: var(--accent-success); font-size: 0.95rem; padding: 0.8rem;" onclick="event.stopPropagation();closePaymentDetail();openIncomingMpesaModal(${p.order_id}, ${orderTotal})">Record offline M-Pesa</button>`;
             }
             if (p.status === 'confirmed') {
                 actionHtml +=
-                    '<span style="color:var(--accent-success);align-self:center;"><i class="fas fa-check-circle"></i> Transaction completed and recorded in the database.</span>';
+                    '<div style="width:100%; text-align:center; color:var(--accent-success); font-weight:700;"><i class="fas fa-check-circle"></i> Transaction confirmed.</div>';
             }
             actions.innerHTML = actionHtml;
 
@@ -334,6 +410,7 @@
                     <tr class="payment-row${Number(p.id) === __selectedPaymentId ? ' payment-row--selected' : ''}" data-payment-id="${
                         p.id
                     }" style="${p.status === 'pending' && p.transaction_id ? 'background: rgba(16, 185, 129, 0.05);' : ''}">
+                        <td onclick="event.stopPropagation();"><input type="checkbox" class="order-checkbox" value="${p.order_id}" data-payment-id="${p.id}" onclick="event.stopPropagation(); updateCombineButton()"></td>
                         <td>${p.order_id ? `#${p.order_id}` : '<span class="badge" style="background:var(--accent-warning)">UNLINKED</span>'}</td>
                         <td>${p.customer_name || 'Guest'}</td>
                         <td>${formatCurrency(p.amount)}</td>
@@ -345,28 +422,38 @@
                         <td><span style="color: ${p.status === 'confirmed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${p.status}</span></td>
                         <td>${p.confirmed_at ? new Date(p.confirmed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : (p.status === 'confirmed' ? new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—')}</td>
                         <td style="white-space: nowrap;">
-                            <div style="display: flex; gap: 0.4rem;">
+                            <div style="display: flex; gap: 0.4rem; align-items: center;">
                                 ${(() => {
                                     const orderTotal = p.total_amount != null ? Number(p.total_amount) : Number(p.amount);
                                     const canAction = p.order_id && p.status !== 'confirmed' && p.payment_method !== 'Cash';
                                     
                                     let html = '';
                                     
+                                    // Print Bill / Receipt (Available for all linked orders)
+                                    if (p.order_id) {
+                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #6366f1; color: #fff; display: inline-flex; align-items: center; gap: 0.3rem;" onclick="event.stopPropagation(); printOrderDirect(${p.order_id})" title="Print Bill/Receipt"><i class="fas fa-print"></i> Print</button>`;
+                                    }
+                                    
                                     if (p.status === 'pending' && p.transaction_id) {
                                         html += `<button type="button" class="btn btn-primary" onclick="event.stopPropagation();confirmPayment(${p.id}, ${p.order_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; animation: pulse 2s infinite;">Confirm</button>`;
                                     } else if (canAction) {
                                         // STK Retry
-                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-success); color: #fff;" onclick="event.stopPropagation();retrySTK(${p.order_id}, ${orderTotal}, '${p.phone_number || ''}', '${p.customer_name || ''}')" title="Retry STK Push"><i class="fas fa-paper-plane"></i> STK</button>`;
+                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-success); color: #fff;" onclick="event.stopPropagation();retrySTK(${p.order_id}, ${Number(p.amount)}, '${p.phone_number || ''}', '${p.customer_name || ''}', ${p.id})" title="Retry STK Push"><i class="fas fa-paper-plane"></i> STK</button>`;
                                         
                                         // Cash Option
                                         html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: #fff;" onclick="event.stopPropagation();payWithCash(${p.order_id}, ${orderTotal})" title="Pay with Cash"><i class="fas fa-money-bill-wave"></i> Cash</button>`;
                                         
                                         // Record Offline
                                         html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #475569; color: #fff;" onclick="event.stopPropagation();openIncomingMpesaModal(${p.order_id}, ${orderTotal})" title="Link Manual Receipt">Manual</button>`;
+                                        
+                                        // Cancel Order (only for Admin)
+                                        if (user && user.role === 'admin') {
+                                            html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-danger); color: #fff;" onclick="event.stopPropagation();cancelOrder(${p.order_id})" title="Cancel Order"><i class="fas fa-times-circle"></i></button>`;
+                                        }
                                     } else if (p.status === 'confirmed' || p.payment_method === 'Cash') {
-                                        html += '<span style="color:var(--accent-success); font-size: 0.85rem;"><i class="fas fa-check-circle"></i> Paid</span>';
+                                        html += '<span style="color:var(--accent-success); font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap;"><i class="fas fa-check-circle"></i> Paid</span>';
                                     } else {
-                                        html += '<span style="color: rgba(255,255,255,0.75); font-size: 0.85rem;">Waiting...</span>';
+                                        html += '<span style="color: rgba(255,255,255,0.75); font-size: 0.85rem; white-space: nowrap;">Waiting...</span>';
                                     }
                                     
                                     return html;
@@ -399,7 +486,7 @@
             if (!__detailModalOpen && !__incomingModalOpen && document.visibilityState === 'visible') loadData();
         }, 7000);
 
-        async function retrySTK(orderId, amount, oldPhone, customerName) {
+        async function retrySTK(orderId, amount, oldPhone, customerName, paymentId) {
             const phone = prompt(`Confirm phone number for STK Push (Order #${orderId}):`, oldPhone || '2547');
             if (!phone) return;
             
@@ -410,7 +497,8 @@
                         orderId,
                         amount,
                         phoneNumber: phone,
-                        customer_name: customerName
+                        customer_name: customerName,
+                        paymentId: paymentId
                     })
                 });
                 alert('STK Push initiated successfully. Please check the customer\'s phone.');
@@ -453,7 +541,161 @@
             }
         }
 
-        const user = JSON.parse(localStorage.getItem('user'));
+        async function printOrderDirect(orderId) {
+            if (!orderId) return alert('No valid order ID provided.');
+            try {
+                // Fetch the order details directly
+                const orderRes = await apiFetch(`/orders/${orderId}`);
+                const order = orderRes.data;
+
+                const printWindow = window.open('', '_blank', 'width=400,height=600');
+                const itemsHtml = order.items.map(i => `
+                    <tr>
+                        <td style="padding: 5px 0;">${i.name} x${i.quantity}</td>
+                        <td style="text-align: right; padding: 5px 0;">${formatCurrency(i.subtotal)}</td>
+                    </tr>
+                `).join('');
+
+                const hotelName = order.hotel_name || 'TABARUQ FOODS';
+                const cashierName = order.cashier_name || 'System';
+                const paybillNum = order.mpesa_paybill || '600000';
+                const tillNum = order.mpesa_till || '174379';
+
+                printWindow.document.write(`
+                    <html>
+                    <head>
+                        <title>Receipt #${order.id}</title>
+                        <style>
+                            body { font-family: 'Courier New', Courier, monospace; font-size: 14px; padding: 20px; color: #000; }
+                            .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+                            .footer { text-align: center; border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; font-size: 12px; }
+                            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                            .total { font-weight: bold; font-size: 16px; border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; text-align: right; }
+                            .meta-item { display: flex; justify-content: space-between; margin: 3px 0; font-size: 13px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2 style="margin: 0; font-size: 18px; letter-spacing: 1px;">${hotelName}</h2>
+                            <p style="margin: 5px 0 0 0; font-size: 12px;">*** RECEIPT / BILL ***</p>
+                        </div>
+                        <div style="margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 8px;">
+                            <div class="meta-item"><span>Order ID:</span> <strong>#${order.id}</strong></div>
+                            <div class="meta-item"><span>Date:</span> <span>${new Date(order.created_at).toLocaleString()}</span></div>
+                            <div class="meta-item"><span>Cashier:</span> <strong>${cashierName}</strong></div>
+                            <div class="meta-item"><span>Customer:</span> <span>${order.customer_name || 'Guest'}</span></div>
+                        </div>
+                        <table>
+                            <tbody>
+                                ${itemsHtml}
+                            </tbody>
+                        </table>
+                        <div class="total">Total Amount: ${formatCurrency(order.total_amount)}</div>
+                        <div style="margin-top: 15px; border-top: 1px dashed #000; padding-top: 8px; font-size: 13px;">
+                            <div class="meta-item"><span>M-Pesa Paybill:</span> <strong>${paybillNum}</strong></div>
+                            <div class="meta-item"><span>M-Pesa Till:</span> <strong>${tillNum}</strong></div>
+                        </div>
+                        <div class="footer">
+                            <p style="margin: 5px 0;">Thank you for dining with us!</p>
+                            <p style="margin: 5px 0;">Powered by TABARUQ Foods POS</p>
+                        </div>
+                        <script>
+                            window.onload = function() { window.print(); window.close(); }
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
+            } catch (err) { alert('Failed to print: ' + err.message); }
+        }
+
+        async function printOrder() {
+            if (!__selectedPaymentId) return;
+            try {
+                const res = await apiFetch(`/payments/${__selectedPaymentId}`);
+                const p = res.data;
+                if (!p.order_id) return alert('No order linked to this payment.');
+                await printOrderDirect(p.order_id);
+            } catch (err) { alert('Failed to print: ' + err.message); }
+        }
+
+        function toggleSelectAll() {
+            const master = document.getElementById('selectAllOrders');
+            document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = master.checked);
+            updateCombineButton();
+        }
+
+        function updateCombineButton() {
+            const checked = document.querySelectorAll('.order-checkbox:checked');
+            const btn = document.getElementById('combineBtn');
+            btn.style.display = checked.length > 1 ? 'block' : 'none';
+        }
+
+        async function combineSelectedOrders() {
+            const checked = document.querySelectorAll('.order-checkbox:checked');
+            const orderIds = Array.from(checked).map(cb => cb.value).filter(v => v !== 'null');
+            
+            if (orderIds.length < 2) return alert('Select at least 2 valid orders to combine.');
+
+            if (!confirm(`Are you sure you want to combine ${orderIds.length} orders into a single bill?`)) return;
+
+            try {
+                let combinedItems = [];
+                let totalAmount = 0;
+                let customerNames = [];
+
+                for (const id of orderIds) {
+                    const res = await apiFetch(`/orders/${id}`);
+                    const order = res.data;
+                    
+                    // Map order items to inventory structure expected by backend createOrder
+                    const mappedItems = order.items.map(item => ({
+                        id: item.item_id,
+                        quantity: item.quantity,
+                        selling_price: item.price,
+                        name: item.name
+                    }));
+                    combinedItems = combinedItems.concat(mappedItems);
+                    totalAmount += Number(order.total_amount);
+                    if (order.customer_name) customerNames.push(order.customer_name);
+                    
+                    // Mark old order as merged (using status status: 'merged' to hide it)
+                    await apiFetch(`/orders/${id}/status`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ status: 'merged', payment_status: 'merged' })
+                    });
+                }
+
+                // Create new combined order with isMerge flag set to true
+                const newOrder = await apiFetch('/orders', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        items: combinedItems,
+                        total_amount: totalAmount,
+                        customer_name: 'Combined: ' + [...new Set(customerNames)].join(', '),
+                        isMerge: true
+                    })
+                });
+
+                alert(`Orders combined into new Order #${newOrder.orderId}`);
+                loadData();
+            } catch (err) { alert(err.message); }
+        }
+
+        async function cancelOrder(id) {
+            if (!id) return;
+            if (!confirm(`Are you sure you want to CANCEL Order #${id}? This will remove it from the active list.`)) return;
+
+            try {
+                await apiFetch(`/orders/${id}/status`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ status: 'cancelled', payment_status: 'cancelled' })
+                });
+                alert('Order cancelled successfully.');
+                loadData();
+            } catch (err) { alert('Failed to cancel: ' + err.message); }
+        }
+
         if (!user || (user.role !== 'admin' && user.role !== 'cashier')) {
             window.location.href = 'index.html';
         } else {
@@ -461,6 +703,7 @@
                 document.getElementById('adminNavLink').style.display = 'block';
             }
             document.getElementById('ordersNavLink').style.display = 'block';
+            document.getElementById('deliveryNavLink').style.display = 'block';
             loadData();
         }
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };

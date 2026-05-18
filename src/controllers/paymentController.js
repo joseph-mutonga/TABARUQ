@@ -1,4 +1,25 @@
 const db = require('../config/db');
+
+// Shared helper to check if order is fully paid and update its status
+async function checkAndCompleteOrder(conn, oid) {
+    const [orderRows] = await conn.execute('SELECT total_amount, status FROM orders WHERE id = ?', [oid]);
+    if (orderRows.length === 0) return;
+    if (orderRows[0].status === 'merged') return; // Do not update merged orders
+    
+    const totalNeeded = Number(orderRows[0].total_amount);
+
+    const [payRows] = await conn.execute(
+        'SELECT SUM(amount) as total_paid FROM payments WHERE order_id = ? AND status = "confirmed"',
+        [oid]
+    );
+    const totalPaid = Number(payRows[0].total_paid || 0);
+
+    if (totalPaid >= totalNeeded) {
+        await conn.execute('UPDATE orders SET payment_status = "paid", status = "completed" WHERE id = ?', [oid]);
+    } else {
+        await conn.execute('UPDATE orders SET payment_status = "partial" WHERE id = ?', [oid]);
+    }
+}
 const axios = require('axios');
 const { getMpesaToken, generateTimestamp } = require('../utils/mpesa');
 require('dotenv').config();
@@ -59,7 +80,7 @@ async function finalizeIncomingLink(conn, { orderId, paymentId, userId, payment 
         const merged = clipMpesaMessage((row.mpesa_result_message || '') + supersedeSuffix);
         await conn.execute("UPDATE payments SET status = 'failed', mpesa_result_message = ? WHERE id = ?", [merged, row.id]);
     }
-    await conn.execute('UPDATE orders SET payment_status = ?, status = ? WHERE id = ?', ['paid', 'completed', orderId]);
+    await checkAndCompleteOrder(conn, orderId);
 }
 
 /** Human-readable line for staff: status text, amount, payer, receipt hint (clipped for DB). */
@@ -76,9 +97,38 @@ function buildStkCallbackDisplayMessage(resultDesc, amountDecimal, payerName, ph
 }
 
 exports.initiateSTKPush = async (req, res) => {
-    const { orderId, phoneNumber, amount, customer_name } = req.body;
+    const { phoneNumber, amount, orderId, customer_name, skipSTK, paymentId } = req.body;
 
     try {
+        // 1. Create/Update payment record in DB
+        let checkoutID = skipSTK ? `OFFLINE-${Date.now()}` : null;
+        
+        let targetPaymentId = paymentId;
+        
+        // If no paymentId provided, we check if there's an existing one ONLY if it's NOT a split/new initiation
+        // Actually, safer: only update if paymentId is provided. 
+        // This ensures split payments (which call this twice) create two records.
+        
+        if (targetPaymentId) {
+            await db.execute(
+                'UPDATE payments SET amount = ?, phone_number = ?, mpesa_checkout_id = ?, status = "pending", customer_name = ? WHERE id = ?',
+                [amount, phoneNumber || null, checkoutID, customer_name || 'Guest', targetPaymentId]
+            );
+        } else {
+            const [result] = await db.execute(
+                'INSERT INTO payments (order_id, amount, phone_number, mpesa_checkout_id, status, customer_name) VALUES (?, ?, ?, ?, ?, ?)',
+                [orderId, amount, phoneNumber || null, checkoutID, 'pending', customer_name || 'Guest']
+            );
+            targetPaymentId = result.insertId;
+        }
+
+        const currentPaymentId = targetPaymentId;
+
+        if (skipSTK) {
+            return res.json({ success: true, message: 'Offline payment record created.' });
+        }
+
+        // 2. If not skipping, proceed to STK Push
         const token = await getMpesaToken();
         const timestamp = generateTimestamp();
         const shortCode = process.env.MPESA_STK_SHORTCODE || process.env.MPESA_SHORTCODE;
@@ -93,7 +143,7 @@ exports.initiateSTKPush = async (req, res) => {
                 Timestamp: timestamp,
                 TransactionType: 'CustomerPayBillOnline',
                 Amount: Math.round(amount),
-                PartyA: phoneNumber, // Phone number to be charged
+                PartyA: phoneNumber,
                 PartyB: shortCode,
                 PhoneNumber: phoneNumber,
                 CallBackURL: process.env.MPESA_CALLBACK_URL,
@@ -108,32 +158,14 @@ exports.initiateSTKPush = async (req, res) => {
         );
 
         if (response.data.ResponseCode === '0') {
-            const checkoutID = response.data.CheckoutRequestID;
-            
-            // Log payment initiation - Check if a pending payment already exists for this order
-            const [existingPending] = await db.execute(
-                'SELECT id FROM payments WHERE order_id = ? AND status = "pending" LIMIT 1',
-                [orderId]
-            );
-
-            if (existingPending.length > 0) {
-                // Update existing pending record with new checkout ID and phone
-                await db.execute(
-                    'UPDATE payments SET amount = ?, phone_number = ?, mpesa_checkout_id = ?, customer_name = ? WHERE id = ?',
-                    [amount, phoneNumber, checkoutID, customer_name || 'Guest', existingPending[0].id]
-                );
-            } else {
-                // Insert new record
-                await db.execute(
-                    'INSERT INTO payments (order_id, amount, phone_number, mpesa_checkout_id, status, customer_name) VALUES (?, ?, ?, ?, ?, ?)',
-                    [orderId, amount, phoneNumber, checkoutID, 'pending', customer_name || 'Guest']
-                );
-            }
-
-            res.json({ success: true, message: 'STK Push initiated', checkoutID });
+            const realCheckoutID = response.data.CheckoutRequestID;
+            // Update the record with the real checkout ID
+            await db.execute('UPDATE payments SET mpesa_checkout_id = ? WHERE id = ?', [realCheckoutID, currentPaymentId]);
+            res.json({ success: true, message: 'STK Push sent successfully', checkoutID: realCheckoutID });
         } else {
-            res.status(400).json({ success: false, message: 'STK Push failed to initiate' });
+            res.status(400).json({ success: false, message: response.data.ResponseDescription });
         }
+
     } catch (error) {
         console.error('STK Push Error:', error.response?.data || error.message);
         res.status(500).json({ success: false, message: 'Payment gateway error' });
@@ -237,11 +269,7 @@ exports.mpesaCallback = async (req, res) => {
                 ]);
                 const oid = payRows[0]?.order_id;
                 if (oid) {
-                    await conn.execute('UPDATE orders SET payment_status = ?, status = ? WHERE id = ?', [
-                        'paid',
-                        'completed',
-                        oid,
-                    ]);
+                    await checkAndCompleteOrder(conn, oid);
                 }
 
                 const paymentId = await selectPaymentIdByCheckout(conn, checkoutID);
@@ -368,11 +396,7 @@ exports.mpesaC2BConfirmation = async (req, res) => {
             });
 
             if (orderId) {
-                await conn.execute('UPDATE orders SET payment_status = ?, status = ? WHERE id = ?', [
-                    'paid',
-                    'completed',
-                    orderId,
-                ]);
+                await checkAndCompleteOrder(conn, orderId);
             }
 
             await conn.commit();
@@ -398,21 +422,21 @@ exports.confirmPayment = async (req, res) => {
     const { paymentId } = req.params;
     const { orderId } = req.body;
     
+    let conn;
     try {
-        const [payment] = await db.execute('SELECT * FROM payments WHERE id = ?', [paymentId]);
-        if (payment.length === 0) return res.status(404).json({ success: false, message: 'Payment not found' });
+        conn = await db.getConnection();
+        await conn.beginTransaction();
 
         // Update payment with orderId and status
-        await db.execute(
+        await conn.execute(
             'UPDATE payments SET order_id = ?, status = ?, confirmed_at = CURRENT_TIMESTAMP, confirmed_by = ? WHERE id = ?',
             [orderId, 'confirmed', req.user.id, paymentId]
         );
 
         // Update order status
-        await db.execute(
-            'UPDATE orders SET payment_status = ?, status = ? WHERE id = ?',
-            ['paid', 'completed', orderId]
-        );
+        await checkAndCompleteOrder(conn, orderId);
+
+        await conn.commit();
 
         // Emit Real-time Update
         const io = req.app.get('io');
@@ -420,8 +444,11 @@ exports.confirmPayment = async (req, res) => {
 
         res.json({ success: true, message: 'Payment linked and confirmed successfully' });
     } catch (err) {
+        if (conn) await conn.rollback();
         console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });
+    } finally {
+        if (conn) conn.release();
     }
 };
 
@@ -431,12 +458,46 @@ exports.getPayments = async (req, res) => {
         let params = [];
         
         if (req.query.status === 'incomplete') {
-            query += " WHERE p.status != 'confirmed'";
+            query = `
+                SELECT p.*, o.total_amount, o.customer_name as order_customer_name, u.username as confirmed_by_user 
+                FROM payments p 
+                LEFT JOIN orders o ON p.order_id = o.id 
+                LEFT JOIN users u ON p.confirmed_by = u.id
+                WHERE p.status != 'confirmed' 
+                  AND (o.id IS NULL OR (o.payment_status != 'paid' AND o.status != 'cancelled' AND o.status != 'merged' AND o.platform IS NULL))
+                
+                UNION
+                
+                SELECT 
+                    NULL as id, 
+                    o.id as order_id, 
+                    o.total_amount as amount, 
+                    NULL as transaction_id, 
+                    NULL as phone_number, 
+                    COALESCE(o.platform, 'Pending') as payment_method, 
+                    'pending' as status, 
+                    NULL as mpesa_checkout_id, 
+                    o.created_at, 
+                    NULL as confirmed_at, 
+                    NULL as confirmed_by, 
+                    o.customer_name, 
+                    CASE 
+                        WHEN o.platform IS NOT NULL THEN CONCAT('Delivery Order: ', o.platform)
+                        ELSE 'No payment attempt yet' 
+                    END as mpesa_result_message,
+                    o.total_amount,
+                    o.customer_name as order_customer_name,
+                    NULL as confirmed_by_user
+                FROM orders o
+                WHERE o.payment_status IN ('pending', 'partial') 
+                  AND o.status != 'cancelled'
+                  AND o.status != 'merged'
+                  AND o.platform IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM payments p2 WHERE p2.order_id = o.id AND p2.status != 'confirmed')
+            `;
         }
         
-        query += ' ORDER BY COALESCE(p.confirmed_at, p.created_at) DESC, p.id DESC LIMIT 100';
-        
-        const [rows] = await db.execute(query, params);
+        const [rows] = await db.execute(query + ' ORDER BY COALESCE(confirmed_at, created_at) DESC, id DESC LIMIT 100', params);
         res.json({ success: true, data: rows });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -451,6 +512,19 @@ exports.getPendingCount = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+exports.getPaymentById = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [rows] = await db.execute('SELECT p.*, o.total_amount FROM payments p LEFT JOIN orders o ON p.order_id = o.id WHERE p.id = ?', [id]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Payment not found' });
+        res.json({ success: true, data: rows[0] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 
 exports.processCashPayment = async (req, res) => {
     const { orderId, amount } = req.body;

@@ -203,3 +203,39 @@ exports.getDeliveryOrders = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+exports.getDeliveryStats = async (req, res) => {
+    try {
+        const [daily] = await db.execute(`
+            SELECT SUM(total_amount) as total, COUNT(id) as count 
+            FROM orders 
+            WHERE platform IS NOT NULL AND DATE(created_at) = CURDATE()
+        `);
+
+        const [weekly] = await db.execute(`
+            SELECT SUM(total_amount) as total, COUNT(id) as count 
+            FROM orders 
+            WHERE platform IS NOT NULL AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
+        `);
+
+        const [monthly] = await db.execute(`
+            SELECT SUM(total_amount) as total, COUNT(id) as count 
+            FROM orders 
+            WHERE platform IS NOT NULL AND MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())
+        `);
+
+        res.json({
+            success: true,
+            data: {
+                daily: daily[0] || { total: 0, count: 0 },
+                weekly: weekly[0] || { total: 0, count: 0 },
+                monthly: monthly[0] || { total: 0, count: 0 }
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+

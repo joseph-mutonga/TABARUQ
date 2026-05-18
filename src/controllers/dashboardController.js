@@ -10,7 +10,23 @@ exports.getStats = async (req, res) => {
         const [[pendingPayments]] = await db.execute('SELECT COUNT(*) as total FROM payments WHERE status = "pending"');
         const [[dueInvoices]] = await db.execute('SELECT COUNT(*) as total FROM orders WHERE payment_status != "paid"');
         const [[itemsCount]] = await db.execute('SELECT COUNT(*) as total FROM inventory');
-        const [[lowStock]] = await db.execute('SELECT COUNT(*) as total FROM inventory WHERE quantity <= low_stock_threshold AND LOWER(category) LIKE "%drink%"');
+        const [[lowStock]] = await db.execute(`
+            SELECT COUNT(*) as total 
+            FROM inventory 
+            WHERE quantity <= low_stock_threshold 
+              AND (
+                LOWER(category) LIKE "%drink%" OR 
+                LOWER(category) LIKE "%juice%" OR 
+                LOWER(category) LIKE "%beer%" OR 
+                LOWER(category) LIKE "%wine%" OR 
+                LOWER(category) LIKE "%cocktail%" OR 
+                LOWER(category) LIKE "%spirit%" OR 
+                LOWER(category) LIKE "%beverage%" OR 
+                LOWER(category) LIKE "%soda%" OR 
+                LOWER(category) LIKE "%shake%" OR 
+                item_type = "ingredient"
+              )
+        `);
         const [[storesCount]] = await db.execute('SELECT COUNT(DISTINCT supplier) as total FROM inventory WHERE supplier IS NOT NULL AND supplier != ""');
         const [[supplierValue]] = await db.execute('SELECT SUM(cost_price * quantity) as total FROM inventory');
         const [topProducts] = await db.execute(`
@@ -26,10 +42,15 @@ exports.getStats = async (req, res) => {
         const [[yearlyExpenses]] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE YEAR(expense_date) = YEAR(CURDATE())');
 
         const [recentOrders] = await db.execute(`
-            SELECT o.*, o.customer_name, u.username as cashier_name, p.payment_method 
+            SELECT o.*, o.customer_name, u.username as cashier_name, p.methods as payment_method 
             FROM orders o 
             JOIN users u ON o.cashier_id = u.id 
-            LEFT JOIN (SELECT order_id, MIN(payment_method) as payment_method FROM payments GROUP BY order_id) p ON o.id = p.order_id
+            LEFT JOIN (
+                SELECT order_id, GROUP_CONCAT(DISTINCT payment_method SEPARATOR ', ') as methods 
+                FROM payments 
+                WHERE status = 'confirmed'
+                GROUP BY order_id
+            ) p ON o.id = p.order_id
             ORDER BY o.created_at DESC LIMIT 5
         `);
 

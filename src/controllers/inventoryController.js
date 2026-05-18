@@ -10,11 +10,11 @@ exports.getItems = async (req, res) => {
 };
 
 exports.addItem = async (req, res) => {
-    const { name, category, cost_price, selling_price, unit, quantity } = req.body;
+    const { name, category, cost_price, selling_price, unit, quantity, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform } = req.body;
     try {
         const [result] = await db.execute(
-            'INSERT INTO inventory (name, category, cost_price, selling_price, unit, quantity) VALUES (?, ?, ?, ?, ?, ?)',
-            [name, category, cost_price, selling_price, unit || 'pcs', quantity || 0]
+            'INSERT INTO inventory (name, category, cost_price, selling_price, unit, quantity, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, category, cost_price, selling_price || 0, unit || 'pcs', quantity || 0, item_type || 'saleable', uber_price || null, glovo_price || null, bolt_price || null, is_delivery || false, delivery_platform || null]
         );
         
         // Initial stock log
@@ -34,11 +34,11 @@ exports.addItem = async (req, res) => {
 
 exports.updateItem = async (req, res) => {
     const { id } = req.params;
-    const { name, category, cost_price, selling_price, unit } = req.body;
+    const { name, category, cost_price, selling_price, unit, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform } = req.body;
     try {
         await db.execute(
-            'UPDATE inventory SET name=?, category=?, cost_price=?, selling_price=?, unit=? WHERE id=?',
-            [name, category, cost_price, selling_price, unit, id]
+            'UPDATE inventory SET name=?, category=?, cost_price=?, selling_price=?, unit=?, item_type=?, uber_price=?, glovo_price=?, bolt_price=?, is_delivery=?, delivery_platform=? WHERE id=?',
+            [name, category, cost_price, selling_price, unit, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform || null, id]
         );
 
         const io = req.app.get('io');
@@ -46,6 +46,7 @@ exports.updateItem = async (req, res) => {
 
         res.json({ success: true, message: 'Item updated' });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };

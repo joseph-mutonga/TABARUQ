@@ -13,5 +13,6 @@ router.post('/orders/:id/status', verifyToken, isCashier, deliveryController.upd
 // Reconciliation (Admin only)
 router.post('/settlements', verifyToken, isAdmin, deliveryController.recordSettlement);
 router.get('/reports/reconciliation', verifyToken, isAdmin, deliveryController.getReconciliationReport);
+router.get('/reports/stats', verifyToken, isAdmin, deliveryController.getDeliveryStats);
 
 module.exports = router;

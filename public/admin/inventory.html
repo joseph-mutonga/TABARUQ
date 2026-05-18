@@ -32,7 +32,9 @@
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
                 <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Sell Foods</a></li>
                 <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments</a></li>
-                <li><a href="inventory.html"></a></li><li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li><li><a href="inventory.html" class="active"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+                <li><a href="inventory.html" class="active"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
@@ -78,10 +80,18 @@
                     <label>Item Name</label>
                     <input type="text" id="itemName" class="form-control" required>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Item Type</label>
+                        <select id="itemType" class="form-control" required>
+                            <option value="saleable">Saleable (Food/Drink)</option>
+                            <option value="ingredient">Ingredient (Stock/Raw)</option>
+                        </select>
+                    </div>
                     <div class="form-group">
                         <label>Category</label>
-                        <input type="text" id="itemCategory" class="form-control" required>
+                        <input type="text" id="itemCategory" class="form-control" list="categoryList" required placeholder="e.g. Soft Drinks">
+                        <datalist id="categoryList"></datalist>
                     </div>
                     <div class="form-group">
                         <label>Unit</label>
@@ -100,12 +110,46 @@
                         <input type="number" id="itemCost" class="form-control" step="0.01" required>
                     </div>
                     <div class="form-group">
-                        <label>Selling Price</label>
+                        <label>Normal Selling Price</label>
                         <input type="number" id="itemSelling" class="form-control" step="0.01" required>
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <div style="margin-top: 1rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                    <label style="color: var(--accent-magenta); font-weight: 700; margin-bottom: 0.5rem; display: block;">Delivery Platform Prices (Optional)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+                        <div class="form-group">
+                            <label style="font-size: 0.7rem;">Uber Price</label>
+                            <input type="number" id="itemUberPrice" class="form-control" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size: 0.7rem;">Glovo Price</label>
+                            <input type="number" id="itemGlovoPrice" class="form-control" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size: 0.7rem;">Bolt Price</label>
+                            <input type="number" id="itemBoltPrice" class="form-control" step="0.01">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 0.5rem;">
+                        <label style="font-size: 0.75rem;">Platform Restriction</label>
+                        <select id="itemDeliveryPlatform" class="form-control" style="font-size: 0.8rem;">
+                            <option value="">All Platforms</option>
+                            <option value="Uber Eats">Uber Eats Only</option>
+                            <option value="Glovo">Glovo Only</option>
+                            <option value="Bolt Food">Bolt Food Only</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top:1rem;">
+                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                        <input type="checkbox" id="itemIsDelivery" style="width:20px; height:20px;">
+                        <span>Show in Delivery Module (Manual Recording)</span>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
                     <button type="button" class="btn" style="background: var(--text-gray);" onclick="closeModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Item</button>
                 </div>
@@ -151,6 +195,16 @@
                 const response = await apiFetch('/inventory');
                 inventory = response.data;
                 renderInventory(inventory);
+                
+                // Populate category autocomplete list dynamically
+                const categories = [...new Set(inventory.map(item => item.category).filter(Boolean))];
+                const defaultCategories = ['Soft Drinks', 'Hot Drinks', 'Fresh Juices', 'Milkshakes', 'Beers', 'Wines', 'Cocktails', 'Spirits', 'Main Course', 'Sides', 'Desserts', 'Fast Food'];
+                const allSuggestedCategories = [...new Set([...defaultCategories, ...categories])];
+                
+                const datalist = document.getElementById('categoryList');
+                if (datalist) {
+                    datalist.innerHTML = allSuggestedCategories.map(cat => `<option value="${cat}"></option>`).join('');
+                }
             } catch (err) {
                 alert(err.message);
             }
@@ -160,9 +214,12 @@
             const body = document.getElementById('inventoryBody');
             body.innerHTML = items.map(item => `
                 <tr>
-                    <td>${item.name}</td>
+                    <td>
+                        <strong>${item.name}</strong>
+                        <div style="font-size:0.7rem; color:var(--text-gray)">${item.item_type === 'ingredient' ? '<i class="fas fa-leaf"></i> Ingredient' : '<i class="fas fa-utensils"></i> Saleable'}</div>
+                    </td>
                     <td>${item.category}</td>
-                    <td>${(item.category || '').toLowerCase().includes('drink') ? `<span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>` : '<span style="color: rgba(255,255,255,0.5)">—</span>'}</td>
+                    <td><span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span></td>
                     <td>${formatCurrency(item.cost_price)}</td>
                     <td>${formatCurrency(item.selling_price)}</td>
                     <td>
@@ -186,25 +243,44 @@
                 document.getElementById('modalTitle').textContent = 'Edit Item';
                 document.getElementById('itemId').value = item.id;
                 document.getElementById('itemName').value = item.name;
+                document.getElementById('itemType').value = item.item_type || 'saleable';
                 document.getElementById('itemCategory').value = item.category;
                 document.getElementById('itemUnit').value = item.unit;
                 document.getElementById('itemCost').value = item.cost_price;
                 document.getElementById('itemSelling').value = item.selling_price;
+                document.getElementById('itemUberPrice').value = item.uber_price || '';
+                document.getElementById('itemGlovoPrice').value = item.glovo_price || '';
+                document.getElementById('itemBoltPrice').value = item.bolt_price || '';
+                document.getElementById('itemDeliveryPlatform').value = item.delivery_platform || '';
+                document.getElementById('itemIsDelivery').checked = !!item.is_delivery;
                 document.getElementById('initialStockGroup').style.display = 'none';
             } else {
                 document.getElementById('modalTitle').textContent = 'Add Item';
                 document.getElementById('itemForm').reset();
                 document.getElementById('itemId').value = '';
-                document.getElementById('initialStockGroup').style.display = 'none';
+                document.getElementById('itemDeliveryPlatform').value = '';
+                document.getElementById('itemIsDelivery').checked = false;
+                document.getElementById('initialStockGroup').style.display = 'block';
             }
         }
 
         document.getElementById('itemCategory').addEventListener('input', (e) => {
             // Only toggle if we are adding a new item (itemId is empty)
             if (!document.getElementById('itemId').value) {
-                const isDrink = e.target.value.toLowerCase().includes('drink');
+                const val = e.target.value.toLowerCase();
+                const isPrepackaged = val.includes('drink') || 
+                                      val.includes('juice') || 
+                                      val.includes('beer') || 
+                                      val.includes('wine') || 
+                                      val.includes('cocktail') || 
+                                      val.includes('spirit') || 
+                                      val.includes('shake') || 
+                                      val.includes('soda') || 
+                                      val.includes('beverage') || 
+                                      (!val.includes('food') && !val.includes('course') && !val.includes('dish') && val.trim() !== '');
+                                      
                 const stockGroup = document.getElementById('initialStockGroup');
-                if (isDrink) {
+                if (isPrepackaged) {
                     stockGroup.style.display = 'block';
                 } else {
                     stockGroup.style.display = 'none';
@@ -260,11 +336,17 @@
             const id = document.getElementById('itemId').value;
             const data = {
                 name: document.getElementById('itemName').value,
+                item_type: document.getElementById('itemType').value,
                 category: document.getElementById('itemCategory').value,
                 unit: document.getElementById('itemUnit').value,
                 cost_price: document.getElementById('itemCost').value,
                 selling_price: document.getElementById('itemSelling').value,
-                quantity: document.getElementById('itemQty').value
+                quantity: document.getElementById('itemQty').value,
+                uber_price: document.getElementById('itemUberPrice').value || null,
+                glovo_price: document.getElementById('itemGlovoPrice').value || null,
+                bolt_price: document.getElementById('itemBoltPrice').value || null,
+                delivery_platform: document.getElementById('itemDeliveryPlatform').value || null,
+                is_delivery: document.getElementById('itemIsDelivery').checked
             };
 
             try {

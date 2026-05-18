@@ -12,6 +12,7 @@ router.post('/c2b-confirmation', paymentController.mpesaC2BConfirmation); // Buy
 router.post('/confirm/:paymentId', verifyToken, isCashier, paymentController.confirmPayment); // Cashier or Admin can confirm
 router.get('/', verifyToken, isCashier, paymentController.getPayments);
 router.get('/pending-count', verifyToken, isCashier, paymentController.getPendingCount);
+router.get('/:id', verifyToken, isCashier, paymentController.getPaymentById);
 router.post('/cash', verifyToken, isCashier, paymentController.processCashPayment);
 router.post('/c2b-validation', paymentController.mpesaC2BValidation); // Buy Goods Validation
 router.post('/register-c2b', verifyToken, isAdmin, paymentController.registerC2BURLs);

@@ -9,11 +9,12 @@ exports.getSalesReport = async (req, res) => {
     }
     try {
         const [rows] = await db.execute(`
-            SELECT DATE(created_at) as date, SUM(total_amount) as total_sales, COUNT(*) as order_count
-            FROM orders
-            WHERE payment_status = 'paid' AND created_at BETWEEN ? AND ?
-            GROUP BY DATE(created_at)
-            ORDER BY date DESC
+            SELECT DATE(o.created_at) as date, u.username as cashier_name, SUM(o.total_amount) as total_sales, COUNT(*) as order_count
+            FROM orders o
+            JOIN users u ON o.cashier_id = u.id
+            WHERE o.payment_status = 'paid' AND o.created_at BETWEEN ? AND ?
+            GROUP BY DATE(o.created_at), o.cashier_id
+            ORDER BY date DESC, total_sales DESC
         `, [`${startDate} 00:00:00`, `${endDate} 23:59:59`]);
         res.json({ success: true, data: rows });
     } catch (err) {
@@ -41,9 +42,13 @@ exports.getProfitLossReport = async (req, res) => {
     try {
         const [sales] = await db.execute('SELECT SUM(total_amount) as total FROM orders WHERE payment_status = "paid" AND created_at BETWEEN ? AND ?', [`${startDate} 00:00:00`, `${endDate} 23:59:59`]);
         const [expenses] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE expense_date BETWEEN ? AND ?', [startDate, endDate]);
+        const [payroll] = await db.execute('SELECT SUM(amount) as total FROM worker_payments WHERE payment_date BETWEEN ? AND ?', [startDate, endDate]);
         
-        const totalSales = sales[0].total || 0;
-        const totalExpenses = expenses[0].total || 0;
+        const totalSales = Number(sales[0].total) || 0;
+        const totalGeneralExpenses = Number(expenses[0].total) || 0;
+        const totalPayroll = Number(payroll[0].total) || 0;
+        
+        const totalExpenses = totalGeneralExpenses + totalPayroll;
         const netProfit = totalSales - totalExpenses;
 
         res.json({
@@ -51,6 +56,8 @@ exports.getProfitLossReport = async (req, res) => {
             data: {
                 totalSales,
                 totalExpenses,
+                totalPayroll,
+                totalGeneralExpenses,
                 netProfit
             }
         });
@@ -69,14 +76,21 @@ exports.getTransactionHistory = async (req, res) => {
     }
     try {
         const [rows] = await db.execute(`
-            SELECT o.*, o.customer_name, u.username as cashier_name, p.payment_method, p.transaction_id,
+            SELECT o.*, o.customer_name, u.username as cashier_name, p.methods as payment_method, p.receipts as transaction_id,
                    (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', i.name) SEPARATOR ', ') 
                     FROM order_items oi 
                     JOIN inventory i ON oi.item_id = i.id 
                     WHERE oi.order_id = o.id) as items_list
             FROM orders o
             JOIN users u ON o.cashier_id = u.id
-            LEFT JOIN (SELECT order_id, MIN(payment_method) as payment_method, MIN(transaction_id) as transaction_id FROM payments GROUP BY order_id) p ON o.id = p.order_id
+            LEFT JOIN (
+                SELECT order_id, 
+                       GROUP_CONCAT(DISTINCT payment_method SEPARATOR ', ') as methods,
+                       GROUP_CONCAT(DISTINCT transaction_id SEPARATOR ', ') as receipts
+                FROM payments 
+                WHERE status = 'confirmed'
+                GROUP BY order_id
+            ) p ON o.id = p.order_id
             WHERE o.created_at BETWEEN ? AND ?
             ORDER BY o.created_at DESC
         `, [`${startDate} 00:00:00`, `${endDate} 23:59:59`]);

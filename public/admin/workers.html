@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Management | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=5">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            justify-content: center; align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+        .tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            color: var(--text-gray);
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            color: var(--accent-magenta);
+            border-bottom: 2px solid var(--accent-magenta);
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="workers.html" class="active"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
+                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
+                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Workers & Weekly Payroll</h1>
+                <div style="display:flex; gap:1rem;">
+                    <button class="btn btn-primary" onclick="openWorkerModal()"><i class="fas fa-plus"></i> Add Worker</button>
+                    <button class="btn btn-success" onclick="openPaymentModal()" style="background:var(--accent-success)"><i class="fas fa-hand-holding-usd"></i> Record Payment</button>
+                </div>
+            </header>
+
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('workers')">Worker List</div>
+                <div class="tab" onclick="switchTab('attendance')">Daily Attendance</div>
+                <div class="tab" onclick="switchTab('weekly')">Weekly Overview</div>
+                <div class="tab" onclick="switchTab('payments')">Payment History</div>
+            </div>
+
+            <div id="workersSection">
+                <div class="glass-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Role</th>
+                                    <th>Weekly Salary</th>
+                                    <th>Present (Week)</th>
+                                    <th>Accrued (Week)</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workersBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="paymentsSection" style="display:none;">
+                <div class="glass-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Worker</th>
+                                    <th>Amount</th>
+                                    <th>Week Range</th>
+                                    <th>Status</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="attendanceSection" style="display:none;">
+                <div class="glass-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                        <h3>Daily Attendance</h3>
+                        <input type="date" id="attendanceDate" class="form-control" style="width:200px;" onchange="loadAttendance()">
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Worker Name</th>
+                                    <th>Role</th>
+                                    <th>Attendance Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="weeklySection" style="display:none;">
+                <div class="glass-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                        <h3>Weekly Attendance Overview</h3>
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <label style="font-size:0.9rem; color:var(--text-gray);">Select Week Date:</label>
+                            <input type="date" id="weeklyDate" class="form-control" style="width:200px;" onchange="loadWeeklyAttendance()">
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr id="weeklyHeaderRow">
+                                    <th>Worker Name</th>
+                                    <th>Mon</th>
+                                    <th>Tue</th>
+                                    <th>Wed</th>
+                                    <th>Thu</th>
+                                    <th>Fri</th>
+                                    <th>Sat</th>
+                                    <th>Sun</th>
+                                    <th>Total Days</th>
+                                </tr>
+                            </thead>
+                            <tbody id="weeklyBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Worker Modal -->
+    <div id="workerModal" class="modal">
+        <div class="modal-content">
+            <h2 id="workerModalTitle">Add Worker</h2>
+            <form id="workerForm">
+                <input type="hidden" id="workerId">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="workerName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" id="workerPhone" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <input type="text" id="workerRole" class="form-control" placeholder="e.g. Chef, Waiter">
+                </div>
+                <div class="form-group">
+                    <label>Weekly Salary (KES)</label>
+                    <input type="number" id="workerSalary" class="form-control" step="0.01" value="0">
+                </div>
+                <div class="form-group" id="workerStatusGroup" style="display:none;">
+                    <label>Status</label>
+                    <select id="workerStatus" class="form-control">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn" style="background: var(--text-gray);" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Worker</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <h2>Record Weekly Payment</h2>
+            <form id="paymentForm">
+                <div class="form-group">
+                    <label>Select Worker</label>
+                    <select id="pWorkerId" class="form-control" required onchange="updateDefaultSalary()"></select>
+                </div>
+                <div class="form-group">
+                    <label>Amount (KES)</label>
+                    <input type="number" id="pAmount" class="form-control" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Payment Date</label>
+                    <input type="date" id="pDate" class="form-control" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Week Start</label>
+                        <input type="date" id="pWeekStart" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Week End</label>
+                        <input type="date" id="pWeekEnd" class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="pNotes" class="form-control" rows="2"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn" style="background: var(--text-gray);" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success">Record Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        let workers = [];
+
+        async function loadWorkers() {
+            try {
+                const res = await apiFetch('/workers');
+                workers = res.data;
+                renderWorkers();
+                populateWorkerSelect();
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadPayments() {
+            try {
+                const res = await apiFetch('/workers/payments');
+                renderPayments(res.data);
+            } catch (err) { console.error(err); }
+        }
+
+        function renderWorkers() {
+            const body = document.getElementById('workersBody');
+            body.innerHTML = workers.map(w => `
+                <tr>
+                    <td><strong>${w.name}</strong><br><small>${w.phone || ''}</small></td>
+                    <td>${w.role || '—'}</td>
+                    <td>${formatCurrency(w.weekly_salary)}</td>
+                    <td style="text-align:center;">${Number(w.present_days) + (Number(w.half_days) * 0.5)} days</td>
+                    <td style="color:var(--accent-success); font-weight:700;">${formatCurrency(w.accrued_this_week)}</td>
+                    <td><span class="badge" style="background: ${w.status === 'active' ? 'var(--accent-success)' : 'var(--text-gray)'}">${w.status}</span></td>
+                    <td>
+                        <button class="btn" style="padding: 0.5rem; background: var(--primary);" onclick="editWorker(${w.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn" style="padding: 0.5rem; background: var(--accent-danger);" onclick="deleteWorker(${w.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderPayments(payments) {
+            const body = document.getElementById('paymentsBody');
+            body.innerHTML = payments.map(p => `
+                <tr>
+                    <td>${new Date(p.payment_date).toLocaleDateString()}</td>
+                    <td><strong>${p.worker_name}</strong></td>
+                    <td style="color:var(--accent-success); font-weight:700;">${formatCurrency(p.amount)}</td>
+                    <td style="font-size:0.8rem;">${p.week_start ? new Date(p.week_start).toLocaleDateString() : ''} to ${p.week_end ? new Date(p.week_end).toLocaleDateString() : ''}</td>
+                    <td><span class="badge" style="background: var(--accent-success)">Paid</span></td>
+                    <td>${p.notes || ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        function populateWorkerSelect() {
+            const select = document.getElementById('pWorkerId');
+            select.innerHTML = '<option value="">Select Worker...</option>' + 
+                workers.filter(w => w.status === 'active').map(w => `<option value="${w.id}" data-salary="${w.weekly_salary}">${w.name}</option>`).join('');
+        }
+
+        function updateDefaultSalary() {
+            const select = document.getElementById('pWorkerId');
+            const option = select.options[select.selectedIndex];
+            if (option.dataset.salary) {
+                document.getElementById('pAmount').value = option.dataset.salary;
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('workersSection').style.display = 'none';
+            document.getElementById('paymentsSection').style.display = 'none';
+            document.getElementById('attendanceSection').style.display = 'none';
+            document.getElementById('weeklySection').style.display = 'none';
+
+            if (tab === 'workers') {
+                document.getElementById('workersSection').style.display = 'block';
+            } else if (tab === 'payments') {
+                document.getElementById('paymentsSection').style.display = 'block';
+                loadPayments();
+            } else if (tab === 'attendance') {
+                document.getElementById('attendanceSection').style.display = 'block';
+                document.getElementById('attendanceDate').value = new Date().toLocaleDateString('en-CA');
+                loadAttendance();
+            } else if (tab === 'weekly') {
+                document.getElementById('weeklySection').style.display = 'block';
+                document.getElementById('weeklyDate').value = new Date().toLocaleDateString('en-CA');
+                loadWeeklyAttendance();
+            }
+        }
+
+        async function loadWeeklyAttendance() {
+            const date = document.getElementById('weeklyDate').value;
+            const body = document.getElementById('weeklyBody');
+            body.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem;">Loading weekly attendance overview...</td></tr>';
+            try {
+                const res = await apiFetch(`/workers/weekly-attendance?date=${date}`);
+                const dates = res.dates;
+                const workersData = res.data;
+
+                const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                const headerRow = document.getElementById('weeklyHeaderRow');
+                headerRow.innerHTML = `
+                    <th>Worker Name</th>
+                    ${weekdays.map((w, idx) => {
+                        const dateStr = dates[idx];
+                        const shortDate = new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        return `<th style="text-align:center;">${w}<br><span style="font-size:0.75rem; color:var(--text-gray); font-weight:400;">${shortDate}</span></th>`;
+                    }).join('')}
+                    <th style="text-align:center;">Total Days</th>
+                `;
+
+                if (workersData.length === 0) {
+                    body.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem; color:var(--text-gray);">No active workers found.</td></tr>';
+                    return;
+                }
+
+                body.innerHTML = workersData.map(w => {
+                    let totalDays = 0;
+
+                    const rowCells = dates.map(dateStr => {
+                        const status = w.attendance[dateStr];
+                        let iconHtml = '—';
+                        if (status === 'present') {
+                            totalDays += 1;
+                            iconHtml = '<span class="badge" style="background:var(--accent-success); color:#fff; font-size:0.75rem;"><i class="fas fa-check"></i> Present</span>';
+                        } else if (status === 'absent') {
+                            iconHtml = '<span class="badge" style="background:var(--accent-danger); color:#fff; font-size:0.75rem;"><i class="fas fa-times"></i> Absent</span>';
+                        } else if (status === 'half-day') {
+                            totalDays += 0.5;
+                            iconHtml = '<span class="badge" style="background:var(--accent-warning); color:#000; font-size:0.75rem;"><i class="fas fa-adjust"></i> Half</span>';
+                        }
+                        return `<td style="text-align:center; vertical-align:middle; padding:0.75rem 0.5rem;">${iconHtml}</td>`;
+                    }).join('');
+
+                    return `
+                        <tr>
+                            <td style="vertical-align:middle;">
+                                <strong>${w.worker_name}</strong><br>
+                                <span style="font-size:0.75rem; color:var(--text-gray);">${w.role || 'Worker'}</span>
+                            </td>
+                            ${rowCells}
+                            <td style="text-align:center; vertical-align:middle; font-weight:700; font-size:1.1rem; color:var(--accent-magenta);">${totalDays} days</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error(err);
+                body.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:1.5rem; color:var(--accent-danger);">Failed to load weekly attendance overview: ${err.message}</td></tr>`;
+            }
+        }
+
+        async function loadAttendance() {
+            const date = document.getElementById('attendanceDate').value;
+            try {
+                const res = await apiFetch(`/workers/attendance?date=${date}`);
+                const data = res.data;
+                document.getElementById('attendanceBody').innerHTML = data.map(w => `
+                    <tr>
+                        <td><strong>${w.worker_name}</strong></td>
+                        <td>${w.role || ''}</td>
+                        <td>
+                            <div style="display:flex; gap:0.5rem;">
+                                <button class="btn" style="background:${w.status === 'present' ? 'var(--accent-success)' : 'rgba(255,255,255,0.1)'}; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="markAttendance(${w.worker_id}, 'present')">Present</button>
+                                <button class="btn" style="background:${w.status === 'absent' ? 'var(--accent-danger)' : 'rgba(255,255,255,0.1)'}; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="markAttendance(${w.worker_id}, 'absent')">Absent</button>
+                                <button class="btn" style="background:${w.status === 'half-day' ? 'var(--accent-warning)' : 'rgba(255,255,255,0.1)'}; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="markAttendance(${w.worker_id}, 'half-day')">Half Day</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) { console.error(err); }
+        }
+
+        async function markAttendance(worker_id, status) {
+            const date = document.getElementById('attendanceDate').value;
+            try {
+                await apiFetch('/workers/attendance', {
+                    method: 'POST',
+                    body: JSON.stringify({ worker_id, date, status })
+                });
+                loadAttendance();
+            } catch (err) { alert(err.message); }
+        }
+
+        function openWorkerModal(worker = null) {
+            document.getElementById('workerModal').style.display = 'flex';
+            if (worker) {
+                document.getElementById('workerModalTitle').textContent = 'Edit Worker';
+                document.getElementById('workerId').value = worker.id;
+                document.getElementById('workerName').value = worker.name;
+                document.getElementById('workerPhone').value = worker.phone;
+                document.getElementById('workerRole').value = worker.role;
+                document.getElementById('workerSalary').value = worker.weekly_salary;
+                document.getElementById('workerStatus').value = worker.status;
+                document.getElementById('workerStatusGroup').style.display = 'block';
+            } else {
+                document.getElementById('workerModalTitle').textContent = 'Add Worker';
+                document.getElementById('workerForm').reset();
+                document.getElementById('workerId').value = '';
+                document.getElementById('workerStatusGroup').style.display = 'none';
+            }
+        }
+
+        function openPaymentModal() {
+            document.getElementById('paymentModal').style.display = 'flex';
+            document.getElementById('pDate').value = new Date().toISOString().split('T')[0];
+            
+            // Set default week range (last 7 days)
+            const end = new Date();
+            const start = new Date();
+            start.setDate(end.getDate() - 6);
+            document.getElementById('pWeekStart').value = start.toISOString().split('T')[0];
+            document.getElementById('pWeekEnd').value = end.toISOString().split('T')[0];
+        }
+
+        function closeModal() {
+            document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+        }
+
+        document.getElementById('workerForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('workerId').value;
+            const data = {
+                name: document.getElementById('workerName').value,
+                phone: document.getElementById('workerPhone').value,
+                role: document.getElementById('workerRole').value,
+                weekly_salary: document.getElementById('workerSalary').value,
+                status: document.getElementById('workerStatus').value
+            };
+            try {
+                if (id) {
+                    await apiFetch(`/workers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    await apiFetch('/workers', { method: 'POST', body: JSON.stringify(data) });
+                }
+                closeModal();
+                loadWorkers();
+            } catch (err) { alert(err.message); }
+        };
+
+        document.getElementById('paymentForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                worker_id: document.getElementById('pWorkerId').value,
+                amount: document.getElementById('pAmount').value,
+                payment_date: document.getElementById('pDate').value,
+                week_start: document.getElementById('pWeekStart').value,
+                week_end: document.getElementById('pWeekEnd').value,
+                notes: document.getElementById('pNotes').value
+            };
+            try {
+                await apiFetch('/workers/payments', { method: 'POST', body: JSON.stringify(data) });
+                closeModal();
+                if (document.querySelector('.tab.active').textContent.includes('History')) loadPayments();
+                alert('Payment recorded successfully!');
+            } catch (err) { alert(err.message); }
+        };
+
+        function editWorker(id) {
+            const worker = workers.find(w => w.id === id);
+            openWorkerModal(worker);
+        }
+
+        async function deleteWorker(id) {
+            if (confirm('Delete this worker?')) {
+                try {
+                    await apiFetch(`/workers/${id}`, { method: 'DELETE' });
+                    loadWorkers();
+                } catch (err) { alert(err.message); }
+            }
+        }
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+
+        loadWorkers();
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

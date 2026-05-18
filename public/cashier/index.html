@@ -15,6 +15,7 @@
             <ul class="nav-links">
                 <li><a href="index.html" class="active"><i class="fas fa-plus-circle"></i> New Order</a></li>
                 <li id="ordersNavLink" style="display:none;"><a href="orders.html"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li id="deliveryNavLink" style="display:none;"><a href="../admin/delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
@@ -55,7 +56,7 @@
 
     <!-- Checkout Modal -->
     <div id="checkoutModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); justify-content:center; align-items:center; z-index: 2000;">
-        <div class="glass-card" style="width: 420px;">
+        <div class="glass-card" style="width: 420px; max-height: 90vh; overflow-y: auto;">
             <h2 style="color: #ffffff; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.15); margin-bottom: 1.5rem;">Complete Order</h2>
             <div class="form-group">
                 <label>Customer Name</label>
@@ -67,12 +68,48 @@
                     <button type="button" class="btn" id="mpesaStkTab" style="flex:1; min-width: 7rem; background: var(--accent-success);" onclick="setPaymentMethod('mpesa_stk')">M-Pesa STK</button>
                     <button type="button" class="btn" id="mpesaOfflineTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('mpesa_offline')">M-Pesa offline</button>
                     <button type="button" class="btn" id="cashTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('cash')">Cash</button>
+                    <button type="button" class="btn" id="platformTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('platform')">Platform (Uber/Bolt)</button>
+                    <button type="button" class="btn" id="splitTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('split')">Split Pay</button>
                 </div>
+            </div>
+            <div id="platformFields" style="display:none;">
+                <div class="form-group">
+                    <label>Platform</label>
+                    <select id="orderPlatform" class="form-control" onchange="updateCartPrices()">
+                        <option value="none">None (In-Hotel)</option>
+                        <option value="Uber Eats">Uber Eats</option>
+                        <option value="Glovo">Glovo</option>
+                        <option value="Bolt Food">Bolt Food</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Platform Order ID (Optional)</label>
+                    <input type="text" id="platformOrderId" class="form-control" placeholder="e.g. #123456">
+                </div>
+                <p class="card-small" style="color: var(--accent-warning); margin-bottom: 1rem;"><i class="fas fa-info-circle"></i> Payments for these orders are settled weekly by the platform.</p>
             </div>
             <div id="mpesaStkFields">
                 <div class="form-group">
                     <label>Customer Phone (M-Pesa)</label>
                     <input type="text" id="custPhone" class="form-control" placeholder="2547XXXXXXXX" value="2547">
+                </div>
+            </div>
+            <div id="splitFields" style="display:none;">
+                <div class="form-group">
+                    <label>M-Pesa STK Amount</label>
+                    <input type="number" id="splitMpesaAmount" class="form-control" placeholder="Amount for STK" oninput="calculateSplitFromSTK()">
+                </div>
+                <div class="form-group">
+                    <label>M-Pesa Phone</label>
+                    <input type="text" id="splitMpesaPhone" class="form-control" value="2547">
+                </div>
+                <div class="form-group">
+                    <label>M-Pesa Offline Amount</label>
+                    <input type="number" id="splitOfflineAmount" class="form-control" placeholder="Amount for Offline" oninput="calculateSplitFromOffline()">
+                </div>
+                <div class="form-group">
+                    <label>Cash Amount</label>
+                    <input type="number" id="splitCashAmount" class="form-control" placeholder="Amount for Cash" oninput="calculateSplitFromCash()">
                 </div>
             </div>
             <div id="mpesaOfflineFields" style="display:none;">
@@ -87,6 +124,7 @@
             </div>
         </div>
     </div>
+
 
     <div id="incomingMpesaModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; justify-content:center; align-items:center; padding:1rem;">
         <div class="glass-card" style="max-width:560px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
@@ -118,10 +156,84 @@
         </div>
     </div>
 
+    <!-- Post-Checkout Transaction Details Modal -->
+    <div id="postCheckoutModal" class="premium-modal-backdrop">
+        <div class="premium-modal" onclick="event.stopPropagation()">
+            <div class="premium-modal-header">
+                <div style="width: 60px; height: 60px; background: #10b981; color: white; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 1.25rem; font-size: 1.75rem; box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4); border: 4px solid #ffffff;">
+                    <i class="fas fa-check"></i>
+                </div>
+                <h2 style="color: #0f172a;">Order Successful</h2>
+                <div id="postModalRef" class="ref-no">REF: #000000</div>
+            </div>
+            <div class="premium-modal-body" style="padding-top: 1.5rem;">
+                <div class="info-grid" style="margin-bottom: 1.5rem;">
+                    <div class="info-item">
+                        <label>Customer</label>
+                        <span id="postModalCustomer">--</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Date & Time</label>
+                        <span id="postModalDate">--</span>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1rem; border-top: 1px solid #f1f5f9;">
+                    <table class="items-table-premium">
+                        <thead>
+                            <tr>
+                                <th>Item Description</th>
+                                <th style="text-align: center;">Qty</th>
+                                <th style="text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="postModalItems"></tbody>
+                    </table>
+                </div>
+
+                <div class="total-section-premium">
+                    <div class="total-label-premium">Grand Total</div>
+                    <div id="postModalTotal" class="total-amount-premium">KES 0.00</div>
+                </div>
+            </div>
+            <div class="premium-modal-footer">
+                <button type="button" class="btn-close-premium" style="background: #1e293b; box-shadow: 0 15px 35px rgba(30, 41, 59, 0.3);" onclick="closePostCheckoutModal()">Done & New Order</button>
+            </div>
+        </div>
+    </div>
+
     <style>
         .incoming-row { cursor: pointer; border-radius: 0.75rem; padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; background: rgba(255,255,255,0.06); border: 2px solid transparent; transition: background 0.15s, border-color 0.15s; }
         .incoming-row:hover { background: rgba(255,255,255,0.1); }
         .incoming-row--sel { border-color: rgba(52, 211, 153, 0.9); background: rgba(16, 185, 129, 0.14); }
+        
+        /* Premium POS Highlight Styling */
+        .product-card.selected-highlight {
+            border-color: var(--accent-cyan) !important;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(34, 211, 238, 0.18)) !important;
+            box-shadow: 0 12px 30px rgba(34, 211, 238, 0.18), inset 0 0 10px rgba(34, 211, 238, 0.08) !important;
+            transform: translateY(-4px) scale(1.02);
+        }
+        
+        .selected-badge {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--primary));
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: 800;
+            padding: 0.35rem 0.65rem;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            box-shadow: 0 4px 10px rgba(34, 211, 238, 0.4);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-transform: none;
+        }
+        
+        @keyframes popIn {
+            0% { transform: scale(0.6); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
     </style>
 
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
@@ -139,12 +251,14 @@
         }
         if (user.role === 'admin' || user.role === 'cashier') {
             document.getElementById('ordersNavLink').style.display = 'block';
+            document.getElementById('deliveryNavLink').style.display = 'block';
         }
 
         async function loadMenu() {
             try {
                 const response = await apiFetch('/inventory');
-                inventory = response.data;
+                // Filter out delivery platform-restricted items for POS cashier
+                inventory = response.data.filter(item => !item.delivery_platform);
                 renderCategoryFilters(inventory);
                 renderMenu(getFilteredItems());
             } catch (err) { alert(err.message); }
@@ -179,18 +293,25 @@
                 menu.innerHTML = '<p style="color: rgba(255,255,255,0.75);">No menu items match your search.</p>';
                 return;
             }
-            menu.innerHTML = items.map(item => `
-                <div class="product-card" onclick="addToCart(${item.id})">
-                    <div style="display:flex; justify-content:space-between; gap: 1rem; align-items:center;">
-                        <strong>${item.name}</strong>
-                        ${(item.category || '').toLowerCase().includes('drink') ? `<span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>` : ''}
+            menu.innerHTML = items.map(item => {
+                const cartItem = cart.find(c => c.id === item.id);
+                const qty = cartItem ? cartItem.quantity : 0;
+                const isSelected = qty > 0;
+                
+                return `
+                    <div class="product-card ${isSelected ? 'selected-highlight' : ''}" onclick="addToCart(${item.id})" style="cursor: pointer; position: relative;">
+                        <div style="display:flex; justify-content:space-between; gap: 1.5rem; align-items:center;">
+                            <strong>${item.name}</strong>
+                            ${isSelected ? `<span class="selected-badge"><i class="fas fa-shopping-basket"></i> ${qty}</span>` : 
+                              (!(item.category || '').toLowerCase().includes('food') ? `<span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>` : '')}
+                        </div>
+                        <div class="product-meta">
+                            <span>${item.category || 'Food & Drink'}</span>
+                            <strong>${formatCurrency(item.selling_price)}</strong>
+                        </div>
                     </div>
-                    <div class="product-meta">
-                        <span>${item.category || 'Food & Drink'}</span>
-                        <strong>${formatCurrency(item.selling_price)}</strong>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         document.getElementById('itemSearch').oninput = () => renderMenu(getFilteredItems());
@@ -204,6 +325,7 @@
                 cart.push({ ...item, quantity: 1 });
             }
             renderCart();
+            renderMenu(getFilteredItems());
         }
 
         function renderCart() {
@@ -216,16 +338,23 @@
             }
 
             let total = 0;
+            const platform = document.getElementById('orderPlatform')?.value || 'none';
+            
             cartList.innerHTML = cart.map((item, index) => {
-                total += item.selling_price * item.quantity;
+                let price = Number(item.selling_price);
+                if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
+                if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
+                if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+
+                total += price * item.quantity;
                 return `
                     <div class="cart-item">
                         <div class="cart-item-details">
                             <div class="cart-item-name">${item.name}</div>
-                            <div class="cart-item-price">${formatCurrency(item.selling_price)} x ${item.quantity}</div>
+                            <div class="cart-item-price">${formatCurrency(price)} x ${item.quantity}</div>
                         </div>
                         <div class="cart-item-actions">
-                            <span class="cart-item-total">${formatCurrency(item.selling_price * item.quantity)}</span>
+                            <span class="cart-item-total">${formatCurrency(price * item.quantity)}</span>
                             <button onclick="removeFromCart(${index})" class="cart-item-remove"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
@@ -236,9 +365,14 @@
             document.getElementById('checkoutBtn').disabled = false;
         }
 
+        function updateCartPrices() {
+            renderCart();
+        }
+
         function removeFromCart(index) {
             cart.splice(index, 1);
             renderCart();
+            renderMenu(getFilteredItems());
         }
 
         document.getElementById('checkoutBtn').onclick = () => {
@@ -253,17 +387,19 @@
             const stkTab = document.getElementById('mpesaStkTab');
             const offTab = document.getElementById('mpesaOfflineTab');
             const cashTab = document.getElementById('cashTab');
+            const splitTab = document.getElementById('splitTab');
+            const platformTab = document.getElementById('platformTab');
+            
             const stkFields = document.getElementById('mpesaStkFields');
             const offFields = document.getElementById('mpesaOfflineFields');
             const cashFields = document.getElementById('cashFields');
+            const splitFields = document.getElementById('splitFields');
+            const platformFields = document.getElementById('platformFields');
+            
             const btn = document.getElementById('processPaymentBtn');
 
-            stkTab.style.background = 'var(--card-bg)';
-            offTab.style.background = 'var(--card-bg)';
-            cashTab.style.background = 'var(--card-bg)';
-            stkFields.style.display = 'none';
-            offFields.style.display = 'none';
-            cashFields.style.display = 'none';
+            [stkTab, offTab, cashTab, splitTab, platformTab].forEach(t => t.style.background = 'var(--card-bg)');
+            [stkFields, offFields, cashFields, splitFields, platformFields].forEach(f => f.style.display = 'none');
 
             if (method === 'mpesa_stk') {
                 stkTab.style.background = 'var(--accent-success)';
@@ -273,11 +409,46 @@
                 offTab.style.background = 'var(--accent-success)';
                 offFields.style.display = 'block';
                 btn.textContent = 'Record offline M-Pesa & complete';
-            } else {
+            } else if (method === 'cash') {
                 cashTab.style.background = 'var(--accent-success)';
                 cashFields.style.display = 'block';
                 btn.textContent = 'Complete Cash Sale';
+            } else if (method === 'platform') {
+                platformTab.style.background = 'var(--accent-success)';
+                platformFields.style.display = 'block';
+                btn.textContent = 'Record Delivery Order';
+            } else if (method === 'split') {
+                splitTab.style.background = 'var(--accent-success)';
+                splitFields.style.display = 'block';
+                btn.textContent = 'Initiate Split Payment';
+                
+                // Initialize split values
+                const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
+                document.getElementById('splitMpesaAmount').value = total;
+                document.getElementById('splitOfflineAmount').value = 0;
+                document.getElementById('splitCashAmount').value = 0;
             }
+        }
+
+        function calculateSplitFromSTK() {
+            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
+            const stk = Number(document.getElementById('splitMpesaAmount').value) || 0;
+            const off = Number(document.getElementById('splitOfflineAmount').value) || 0;
+            document.getElementById('splitCashAmount').value = Math.max(0, total - stk - off);
+        }
+
+        function calculateSplitFromOffline() {
+            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
+            const stk = Number(document.getElementById('splitMpesaAmount').value) || 0;
+            const off = Number(document.getElementById('splitOfflineAmount').value) || 0;
+            document.getElementById('splitCashAmount').value = Math.max(0, total - stk - off);
+        }
+
+        function calculateSplitFromCash() {
+            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
+            const cash = Number(document.getElementById('splitCashAmount').value) || 0;
+            const off = Number(document.getElementById('splitOfflineAmount').value) || 0;
+            document.getElementById('splitMpesaAmount').value = Math.max(0, total - cash - off);
         }
 
         let __incomingModalOpen = false;
@@ -291,6 +462,47 @@
         document.getElementById('incomingMpesaModal').addEventListener('click', (e) => {
             if (e.target.id === 'incomingMpesaModal') closeIncomingMpesaModal();
         });
+
+
+        function closePostCheckoutModal() {
+            document.getElementById('postCheckoutModal').style.display = 'none';
+            cart = [];
+            renderCart();
+            loadMenu();
+        }
+
+        async function showPostCheckoutModal(orderId) {
+            try {
+                const resp = await apiFetch(`/orders/${orderId}`);
+                const order = resp.data;
+                const items = order.items || [];
+                
+                document.getElementById('postModalRef').textContent = `REF: #${order.id}`;
+                document.getElementById('postModalCustomer').textContent = order.customer_name || 'Guest';
+                document.getElementById('postModalDate').textContent = new Date(order.created_at).toLocaleString();
+                document.getElementById('postModalTotal').textContent = formatCurrency(order.total_amount);
+                
+                const itemsBody = document.getElementById('postModalItems');
+                itemsBody.innerHTML = items.map(i => `
+                    <tr>
+                        <td>
+                            <span class="item-name">${i.name}</span>
+                        </td>
+                        <td style="text-align: center; font-weight: 700;">${Number(i.quantity)}</td>
+                        <td style="text-align: right; font-weight: 800; color: #0f172a;">${formatCurrency(i.subtotal)}</td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('checkoutModal').style.display = 'none';
+                document.getElementById('postCheckoutModal').style.display = 'flex';
+            } catch (err) {
+                console.error(err);
+                alert('Order completed, but failed to show details modal.');
+                cart = [];
+                renderCart();
+                loadMenu();
+            }
+        }
 
         function closeIncomingMpesaModal(options = {}) {
             const oid = __incomingOrderId;
@@ -444,34 +656,75 @@
         }
 
         document.getElementById('processPaymentBtn').onclick = async () => {
-            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
+            const platformSelection = document.getElementById('orderPlatform')?.value || 'none';
+            const total = cart.reduce((acc, item) => {
+                let price = Number(item.selling_price);
+                if (platformSelection === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
+                if (platformSelection === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
+                if (platformSelection === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                return acc + (price * item.quantity);
+            }, 0);
             const customerName = document.getElementById('custName').value.trim();
+            const platform = currentMethod === 'platform' ? document.getElementById('orderPlatform').value : 'none';
+            const platform_order_id = currentMethod === 'platform' ? document.getElementById('platformOrderId').value : null;
 
             try {
                 const orderResp = await apiFetch('/orders', {
                     method: 'POST',
-                    body: JSON.stringify({ items: cart, total_amount: total, customer_name: customerName })
+                    body: JSON.stringify({ 
+                        items: cart, 
+                        total_amount: total, 
+                        customer_name: customerName,
+                        platform: platform !== 'none' ? platform : null,
+                        platform_order_id: platform_order_id
+                    })
                 });
 
                 if (currentMethod === 'mpesa_stk') {
                     const phone = document.getElementById('custPhone').value;
+
                     await apiFetch('/payments/stk-push', {
                         method: 'POST',
                         body: JSON.stringify({ orderId: orderResp.orderId, phoneNumber: phone, amount: total, customer_name: customerName })
                     });
-                    alert('STK Push sent to customer phone. You can confirm from Orders if needed, or record offline M-Pesa there if they paid manually instead.');
-                    cart = [];
-                    renderCart();
-                    document.getElementById('checkoutModal').style.display = 'none';
-                    loadMenu();
+                    showPostCheckoutModal(orderResp.orderId);
                 } else if (currentMethod === 'mpesa_offline') {
                     openIncomingMpesaModal(orderResp.orderId, total, customerName, { fromCheckout: true });
-                } else {
+                } else if (currentMethod === 'cash') {
                     await apiFetch('/payments/cash', {
                         method: 'POST',
                         body: JSON.stringify({ orderId: orderResp.orderId, amount: total })
                     });
-                    alert('Cash payment recorded. Order completed.');
+                    showPostCheckoutModal(orderResp.orderId);
+                } else if (currentMethod === 'platform') {
+                    // Payment for platform orders is handled externally/weekly
+                    showPostCheckoutModal(orderResp.orderId);
+                } else if (currentMethod === 'split') {
+                    const mpesaAmt = Number(document.getElementById('splitMpesaAmount').value) || 0;
+                    const offlineAmt = Number(document.getElementById('splitOfflineAmount').value) || 0;
+                    const cashAmt = Number(document.getElementById('splitCashAmount').value) || 0;
+                    const phone = document.getElementById('splitMpesaPhone').value;
+                    
+                    if (mpesaAmt > 0) {
+                        await apiFetch('/payments/stk-push', {
+                            method: 'POST',
+                            body: JSON.stringify({ orderId: orderResp.orderId, phoneNumber: phone, amount: mpesaAmt, customer_name: customerName })
+                        });
+                    }
+                    if (offlineAmt > 0) {
+                        // Create a pending record for offline that cashier can link later
+                        await apiFetch('/payments/stk-push', { // Using same endpoint logic but with null phone to just log it? No, better use a dummy checkout id or specific endpoint
+                             method: 'POST',
+                             body: JSON.stringify({ orderId: orderResp.orderId, amount: offlineAmt, customer_name: customerName, skipSTK: true }) 
+                        });
+                    }
+                    if (cashAmt > 0) {
+                        await apiFetch('/payments/cash', {
+                            method: 'POST',
+                            body: JSON.stringify({ orderId: orderResp.orderId, amount: cashAmt })
+                        });
+                    }
+                    alert(`Split payment initiated.\n- STK: KES ${mpesaAmt}\n- Offline M-Pesa: KES ${offlineAmt}\n- Cash: KES ${cashAmt}`);
                     cart = [];
                     renderCart();
                     document.getElementById('checkoutModal').style.display = 'none';

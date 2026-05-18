@@ -16,6 +16,7 @@
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
                 <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="history.html" class="active"><i class="fas fa-history"></i> History</a></li>
@@ -49,22 +50,21 @@
                 </div>
             </div>
 
+
             <div class="glass-card" style="margin-top: 2rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Detailed Transaction History</h3>
+                    <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Sales History</h3>
                     <button class="btn" style="background: var(--accent-success); padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="exportCSV('transactionHistoryBody')"><i class="fas fa-file-csv"></i> Export CSV</button>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Order ID</th>
-                                <th>Customer</th>
-                                <th>Date & Time</th>
-                                <th>Amount</th>
-                                <th>Method</th>
-                                <th>Status</th>
-                                <th>Cashier</th>
+                                <th>REF</th>
+                                <th>DATE</th>
+                                <th>TOTAL</th>
+                                <th>STATUS</th>
+                                <th>ACTION</th>
                             </tr>
                         </thead>
                         <tbody id="transactionHistoryBody"></tbody>
@@ -74,27 +74,52 @@
         </main>
     </div>
 
-    <div id="orderDetailModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
-        <div class="glass-card" style="max-width:520px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
-            <h2 style="color:#fff; margin-bottom:1rem; font-size:1.15rem;">Transaction Details</h2>
-            <dl id="orderDetailDl" style="color:rgba(255,255,255,0.92); font-size:0.95rem; line-height:1.6; margin:0;"></dl>
-            
-            <h3 style="color:#fff; margin-top:1.5rem; margin-bottom:0.5rem; font-size:1rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem;">Order Items</h3>
-            <div class="table-container" style="margin-bottom: 1rem;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th>Qty</th>
-                            <th>Price</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody id="orderItemsBody"></tbody>
-                </table>
-            </div>
 
-            <button type="button" class="btn" style="background:#64748b; color:#fff; width:100%;" onclick="closeOrderDetail()">Close</button>
+    <div id="orderDetailModal" class="premium-modal-backdrop">
+        <div class="premium-modal" onclick="event.stopPropagation()">
+            <div class="premium-modal-header">
+                <button type="button" class="premium-modal-close" onclick="closeOrderDetail()">&times;</button>
+                <h2>Transaction Details</h2>
+                <div id="modalRefNo" class="ref-no">REF: #000000</div>
+            </div>
+            <div class="premium-modal-body">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Date:</label>
+                        <span id="modalDate">--/--/----</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Cashier:</label>
+                        <span id="modalCashier">System Admin</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Payment Mode:</label>
+                        <span id="modalPaymentMode">Cash</span>
+                    </div>
+                </div>
+
+                <div>
+                    <table class="items-table-premium">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Detail</th>
+                                <th style="text-align: center;">Qty</th>
+                                <th style="text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderItemsBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="total-section-premium">
+                    <div class="total-label-premium">Total Amount</div>
+                    <div id="modalTotalAmount" class="total-amount-premium">KES 0.00</div>
+                </div>
+            </div>
+            <div class="premium-modal-footer">
+                <button type="button" class="btn-close-premium" onclick="closeOrderDetail()">Close</button>
+            </div>
         </div>
     </div>
 
@@ -140,25 +165,26 @@
                 const historyResp = await apiFetch(`/reports/transactions?startDate=${start}&endDate=${end}`);
                 __allHistory = historyResp.data;
                 
+
                 document.getElementById('transactionHistoryBody').innerHTML = __allHistory.map(t => `
-                    <tr style="cursor: pointer; transition: background 0.15s ease;" onclick="showOrderDetail(${t.id})" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
-                        <td>#${t.id}</td>
-                        <td>${t.customer_name || 'Guest'}</td>
-                        <td>${new Date(t.created_at).toLocaleString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit'})}</td>
-                        <td>${formatCurrency(t.total_amount)}</td>
-                        <td><span class="badge" style="background: ${t.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'}; white-space: nowrap;">${t.payment_method || 'M-Pesa'}</span></td>
-                        <td><span style="color: ${t.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${t.status}</span></td>
-                        <td>${t.cashier_name}</td>
+                    <tr>
+                        <td style="font-weight: 700;">#${t.id} ${t.sale_type === 'tailoring' ? '<span class="badge" style="background:var(--primary); font-size:0.6rem;">CUSTOM</span>' : ''}</td>
+                        <td style="font-size: 0.9rem;">${new Date(t.created_at).toLocaleString()}</td>
+                        <td style="font-weight: 700;">${formatCurrency(t.total_amount)}</td>
+                        <td><span class="badge" style="background: ${t.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'};">${t.status}</span></td>
+                        <td>
+                            <button class="btn" style="background: var(--primary); padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="showOrderDetail(${t.id})">Details</button>
+                        </td>
                     </tr>
                 `).join('');
             } catch (err) { alert(err.message); }
         }
 
+
         async function showOrderDetail(id) {
             const t = __allHistory.find(x => x.id === id);
             if (!t) return;
             
-            const dl = document.getElementById('orderDetailDl');
             const itemsBody = document.getElementById('orderItemsBody');
             
             function esc(s) {
@@ -167,41 +193,38 @@
                 return d.innerHTML;
             }
             
-            const rows = [
-                ['Order ID', `#${t.id}`],
-                ['Customer', t.customer_name || 'Guest'],
-                ['Total Amount', formatCurrency(t.total_amount)],
-                ['Payment Method', t.payment_method || 'M-Pesa'],
-                ['M-Pesa Receipt', t.transaction_id || 'N/A'],
-                ['Status', t.status],
-                ['Date & Time', new Date(t.created_at).toLocaleString()],
-                ['Cashier', t.cashier_name]
-            ];
+            // Populate basic info
+            document.getElementById('modalRefNo').textContent = `REF: #${t.id}`;
+            document.getElementById('modalDate').textContent = new Date(t.created_at).toLocaleString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            document.getElementById('modalCashier').textContent = t.cashier_name || 'System Admin';
+            document.getElementById('modalPaymentMode').textContent = t.payment_method || 'M-Pesa';
+            document.getElementById('modalTotalAmount').textContent = formatCurrency(t.total_amount);
             
-            dl.innerHTML = rows.map(([k, v]) => 
-                `<div style="margin-bottom:0.75rem"><dt style="font-weight:700;color:rgba(255,255,255,0.75);font-size:0.8rem;text-transform:uppercase;">${esc(k)}</dt><dd style="margin:0.25rem 0 0 0;word-break:break-word;">${esc(v)}</dd></div>`
-            ).join('');
-            
-            itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading items...</td></tr>';
+            itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2rem;">Loading items...</td></tr>';
             document.getElementById('orderDetailModal').style.display = 'flex';
             
             try {
                 const resp = await apiFetch(`/orders/${id}`);
                 const items = resp.data.items || [];
                 if (items.length === 0) {
-                    itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No items found</td></tr>';
+                    itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 2rem;">No items found</td></tr>';
                 } else {
                     itemsBody.innerHTML = items.map(i => `
                         <tr>
-                            <td>${esc(i.name)}</td>
-                            <td>${Number(i.quantity)}</td>
-                            <td>${formatCurrency(i.price)}</td>
-                            <td>${formatCurrency(i.subtotal)}</td>
+                            <td>
+                                <span class="item-name">${esc(i.name)}</span>
+                                <span class="item-ref">REF: #${i.item_id}</span>
+                            </td>
+                            <td style="color: #64748b; font-size: 0.85rem;">
+                                ${i.category ? esc(i.category) : 'Standard Item'}
+                            </td>
+                            <td style="text-align: center; font-weight: 600;">${Number(i.quantity)}</td>
+                            <td style="text-align: right; font-weight: 700; color: #1e293b;">${formatCurrency(i.subtotal)}</td>
                         </tr>
                     `).join('');
                 }
             } catch (err) {
-                itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--accent-danger);">Failed to load items</td></tr>';
+                itemsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--accent-danger); padding: 2rem;">Failed to load items</td></tr>';
             }
         }
 

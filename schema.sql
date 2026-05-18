@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
     cashier_id INT,
     total_amount DECIMAL(10, 2) NOT NULL,
-    status ENUM('pending', 'completed', 'cancelled') DEFAULT 'pending',
-    payment_status ENUM('pending', 'paid', 'failed') DEFAULT 'pending',
+    status ENUM('pending', 'completed', 'cancelled', 'merged') DEFAULT 'pending',
+    payment_status ENUM('pending', 'paid', 'failed', 'partial', 'merged') DEFAULT 'pending',
     customer_name VARCHAR(100) DEFAULT 'Guest',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (cashier_id) REFERENCES users(id)
@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     quantity DECIMAL(10, 2) NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
     subtotal DECIMAL(10, 2) NOT NULL,
+    item_name VARCHAR(255) DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (item_id) REFERENCES inventory(id)
 );

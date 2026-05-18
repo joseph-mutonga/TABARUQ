@@ -16,6 +16,7 @@
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
                 <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html" class="active"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
@@ -55,8 +56,12 @@
                     <div class="stat-value" id="pSales">KES 0</div>
                 </div>
                 <div class="glass-card stat-card">
-                    <p style="color: rgba(255,255,255,0.75);">Period Expenses</p>
+                    <p style="color: rgba(255,255,255,0.75);">Operational Expenses</p>
                     <div class="stat-value" id="pExpenses" style="color: var(--accent-danger);">KES 0</div>
+                </div>
+                <div class="glass-card stat-card">
+                    <p style="color: rgba(255,255,255,0.75);">Workforce Payroll</p>
+                    <div class="stat-value" id="pPayroll" style="color: var(--accent-warning);">KES 0</div>
                 </div>
                 <div class="glass-card stat-card">
                     <p style="color: rgba(255,255,255,0.75);">Net Profit</p>
@@ -75,6 +80,7 @@
                             <thead>
                                 <tr>
                                     <th>Date</th>
+                                    <th>Cashier</th>
                                     <th>Order Count</th>
                                     <th>Total Sales</th>
                                 </tr>
@@ -169,12 +175,14 @@
                 const historyResp = await apiFetch(`/reports/transactions?startDate=${start}&endDate=${end}`);
                 
                 document.getElementById('pSales').textContent = formatCurrency(profitResp.data.totalSales);
-                document.getElementById('pExpenses').textContent = formatCurrency(profitResp.data.totalExpenses);
+                document.getElementById('pExpenses').textContent = formatCurrency(profitResp.data.totalGeneralExpenses);
+                document.getElementById('pPayroll').textContent = formatCurrency(profitResp.data.totalPayroll);
                 document.getElementById('pProfit').textContent = formatCurrency(profitResp.data.netProfit);
 
                 document.getElementById('salesReportBody').innerHTML = salesResp.data.map(s => `
                     <tr>
                         <td>${new Date(s.date).toLocaleDateString()}</td>
+                        <td><span class="badge" style="background: var(--primary);">${s.cashier_name}</span></td>
                         <td>${s.order_count}</td>
                         <td>${formatCurrency(s.total_sales)}</td>
                     </tr>
