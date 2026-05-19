@@ -35,16 +35,16 @@ exports.getStats = async (req, res) => {
             JOIN inventory i ON oi.item_id = i.id
             GROUP BY oi.item_id
             ORDER BY sold DESC
-            LIMIT 15
+            LIMIT 4
         `);
         const [[cashSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method = "Cash" AND status = "confirmed" AND YEAR(confirmed_at) = YEAR(CURDATE())');
         const [[mpesaSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method LIKE "%M-Pesa%" AND status = "confirmed" AND YEAR(confirmed_at) = YEAR(CURDATE())');
         const [[yearlyExpenses]] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE YEAR(expense_date) = YEAR(CURDATE())');
 
         const [recentOrders] = await db.execute(`
-            SELECT o.*, o.customer_name, u.username as cashier_name, p.methods as payment_method 
+            SELECT o.*, o.customer_name, COALESCE(u.username, o.platform, 'Delivery') as cashier_name, p.methods as payment_method 
             FROM orders o 
-            JOIN users u ON o.cashier_id = u.id 
+            LEFT JOIN users u ON o.cashier_id = u.id 
             LEFT JOIN (
                 SELECT order_id, GROUP_CONCAT(DISTINCT payment_method SEPARATOR ', ') as methods 
                 FROM payments 

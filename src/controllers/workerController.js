@@ -81,15 +81,43 @@ exports.getWorkerPayments = async (req, res) => {
 
 exports.recordWorkerPayment = async (req, res) => {
     const { worker_id, amount, payment_date, week_start, week_end, status, notes } = req.body;
+    let conn;
     try {
-        await db.execute(
+        conn = await db.getConnection();
+        await conn.beginTransaction();
+
+        const [workerRows] = await conn.execute('SELECT name FROM workers WHERE id = ?', [worker_id]);
+        if (workerRows.length === 0) {
+            await conn.rollback();
+            return res.status(404).json({ success: false, message: 'Worker not found' });
+        }
+        const workerName = workerRows[0].name;
+
+        await conn.execute(
             'INSERT INTO worker_payments (worker_id, amount, payment_date, week_start, week_end, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [worker_id, amount, payment_date, week_start, week_end, status || 'paid', notes]
         );
-        res.status(201).json({ success: true, message: 'Payment recorded' });
+
+        // Record workforce salary payment in the expenses table under category 'Salaries'
+        await conn.execute(
+            'INSERT INTO expenses (description, category, amount, expense_date, created_by) VALUES (?, ?, ?, ?, ?)',
+            [`Salary Payment - ${workerName}`, 'Salaries', amount, payment_date, req.user?.id || null]
+        );
+
+        await conn.commit();
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('expense_update');
+        }
+
+        res.status(201).json({ success: true, message: 'Payment recorded successfully' });
     } catch (err) {
+        if (conn) await conn.rollback();
         console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });
+    } finally {
+        if (conn) conn.release();
     }
 };
 exports.markAttendance = async (req, res) => {

@@ -50,14 +50,18 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
                 <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li><a href="workers.html" class="active"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="stocks.html"><i class="fas fa-warehouse"></i> Stocks</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
-                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
+                
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
@@ -67,7 +71,7 @@
                 <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Workers & Weekly Payroll</h1>
                 <div style="display:flex; gap:1rem;">
                     <button class="btn btn-primary" onclick="openWorkerModal()"><i class="fas fa-plus"></i> Add Worker</button>
-                    <button class="btn btn-success" onclick="openPaymentModal()" style="background:var(--accent-success)"><i class="fas fa-hand-holding-usd"></i> Record Payment</button>
+                    <button class="btn btn-success" onclick="openPaymentModal()"><i class="fas fa-hand-holding-usd"></i> Record Payment</button>
                 </div>
             </header>
 
@@ -250,6 +254,9 @@
 
     <script src="../js/api.js"></script>
     <script>
+        function getLocalDateStr(date = new Date()) {
+            return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        }
         let workers = [];
 
         async function loadWorkers() {
@@ -454,14 +461,14 @@
 
         function openPaymentModal() {
             document.getElementById('paymentModal').style.display = 'flex';
-            document.getElementById('pDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('pDate').value = getLocalDateStr();
             
             // Set default week range (last 7 days)
             const end = new Date();
             const start = new Date();
             start.setDate(end.getDate() - 6);
-            document.getElementById('pWeekStart').value = start.toISOString().split('T')[0];
-            document.getElementById('pWeekEnd').value = end.toISOString().split('T')[0];
+            document.getElementById('pWeekStart').value = getLocalDateStr(start);
+            document.getElementById('pWeekEnd').value = getLocalDateStr(end);
         }
 
         function closeModal() {
@@ -524,7 +531,30 @@
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user || user.role !== 'admin') window.location.href = '../index.html';
 
+        async function checkPendingPayments() {
+            try {
+                const response = await apiFetch('/payments/pending-count');
+                const badge = document.getElementById('pendingBadge');
+                if (badge) {
+                    if (response.count > 0) {
+                        badge.textContent = response.count;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            } catch (err) { console.error(err); }
+        }
+
         loadWorkers();
+        checkPendingPayments();
+        setInterval(checkPendingPayments, 30000);
+
+        if (typeof socket !== 'undefined' && socket) {
+            socket.on('payment_update', checkPendingPayments);
+            socket.on('order_update', checkPendingPayments);
+        }
+
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
     </script>
 </body>

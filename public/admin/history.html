@@ -7,6 +7,242 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="../css/style.css?v=5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Modal Backdrop */
+        .premium-modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(4, 10, 24, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* Modal Container */
+        .premium-modal {
+            background: rgba(8, 18, 40, 0.95) !important;
+            border: 1px solid rgba(99, 102, 241, 0.25) !important;
+            border-radius: 1.5rem !important;
+            width: 100% !important;
+            max-width: 650px !important;
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7),
+                        0 0 40px rgba(99, 102, 241, 0.15) !important;
+            overflow: hidden !important;
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Header */
+        .premium-modal-header {
+            padding: 1.75rem 2rem !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+            position: relative !important;
+            background: linear-gradient(180deg, rgba(99, 102, 241, 0.05) 0%, transparent 100%) !important;
+        }
+
+        .premium-modal-header h2 {
+            font-size: 1.5rem !important;
+            font-weight: 800 !important;
+            color: #ffffff !important;
+            margin: 0 !important;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .ref-no {
+            font-size: 0.9rem !important;
+            font-weight: 700 !important;
+            color: var(--accent-cyan) !important;
+            margin-top: 0.4rem !important;
+            letter-spacing: 0.05em !important;
+        }
+
+        .premium-modal-close {
+            position: absolute !important;
+            top: 1.5rem !important;
+            right: 1.5rem !important;
+            background: none !important;
+            border: none !important;
+            color: rgba(255, 255, 255, 0.6) !important;
+            font-size: 1.8rem !important;
+            cursor: pointer !important;
+            line-height: 1 !important;
+            transition: color 0.2s, transform 0.2s !important;
+        }
+
+        .premium-modal-close:hover {
+            color: var(--accent-danger) !important;
+            transform: scale(1.1) !important;
+        }
+
+        /* Body */
+        .premium-modal-body {
+            padding: 2rem !important;
+            max-height: 60vh !important;
+            overflow-y: auto !important;
+        }
+
+        /* Info Grid */
+        .info-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 1.5rem !important;
+            margin-bottom: 2rem !important;
+            padding: 1.25rem !important;
+            background: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.06) !important;
+            border-radius: 1rem !important;
+        }
+
+        .info-item {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.4rem !important;
+        }
+
+        .info-item label {
+            display: block !important;
+            font-size: 0.75rem !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            color: rgba(255, 255, 255, 0.5) !important;
+            font-weight: 700 !important;
+            margin-bottom: 0 !important;
+        }
+
+        .info-item span {
+            display: block !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            color: #ffffff !important;
+        }
+
+        /* Items Table overrides to defeat light mode table selectors in style.css */
+        .premium-modal .items-table-premium {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin-bottom: 2rem !important;
+            background: transparent !important;
+        }
+
+        .premium-modal .items-table-premium th {
+            text-align: left !important;
+            font-size: 0.8rem !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            color: rgba(255, 255, 255, 0.5) !important;
+            padding: 0.75rem 1rem !important;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1) !important;
+            font-weight: 700 !important;
+            background: transparent !important;
+            position: static !important;
+        }
+
+        .premium-modal .items-table-premium td {
+            padding: 1rem !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+            color: rgba(255, 255, 255, 0.9) !important;
+            font-size: 0.95rem !important;
+            background: transparent !important;
+        }
+
+        .premium-modal .items-table-premium tr:last-child td {
+            border-bottom: none !important;
+        }
+
+        .premium-modal .items-table-premium td .item-name {
+            display: block !important;
+            font-weight: 700 !important;
+            color: #ffffff !important;
+            font-size: 1.05rem !important;
+            margin-bottom: 0.2rem !important;
+        }
+
+        .premium-modal .items-table-premium td .item-ref {
+            display: block !important;
+            font-size: 0.75rem !important;
+            color: rgba(255, 255, 255, 0.4) !important;
+            margin-top: 0.2rem !important;
+            background: transparent !important;
+            padding: 0 !important;
+        }
+
+        /* Total Section overrides */
+        .premium-modal .total-section-premium {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            padding: 1.25rem 1.75rem !important;
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.15), rgba(34, 211, 238, 0.15)) !important;
+            border: 1px solid rgba(99, 102, 241, 0.2) !important;
+            border-radius: 1rem !important;
+            margin-top: 1rem !important;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .premium-modal .total-label-premium {
+            font-size: 1rem !important;
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            color: #ffffff !important;
+        }
+
+        .premium-modal .total-amount-premium {
+            font-size: 1.6rem !important;
+            font-weight: 800 !important;
+            color: var(--accent-cyan) !important;
+            text-shadow: 0 0 10px rgba(34, 211, 238, 0.4) !important;
+        }
+
+        /* Footer overrides */
+        .premium-modal-footer {
+            padding: 1.25rem 2rem !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+            display: flex !important;
+            justify-content: flex-end !important;
+            background: rgba(0, 0, 0, 0.15) !important;
+        }
+
+        .btn-close-premium {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            color: #ffffff !important;
+            padding: 0.75rem 1.75rem !important;
+            border-radius: 0.75rem !important;
+            font-weight: 700 !important;
+            font-size: 0.9rem !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            text-transform: none !important;
+            width: auto !important;
+            box-shadow: none !important;
+        }
+
+        .btn-close-premium:hover {
+            background: rgba(255, 255, 255, 0.15) !important;
+            border-color: rgba(255, 255, 255, 0.25) !important;
+            transform: translateY(-1px) !important;
+        }
+
+        .btn-close-premium:active {
+            transform: translateY(0) !important;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
 </head>
 <body>
     <div class="layout">
@@ -14,14 +250,18 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
                 <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="stocks.html"><i class="fas fa-warehouse"></i> Stocks</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="history.html" class="active"><i class="fas fa-history"></i> History</a></li>
-                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
+                
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
@@ -126,8 +366,11 @@
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         let __allHistory = [];
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
+        function getLocalDateStr(date = new Date()) {
+            return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        }
+
+        const todayStr = getLocalDateStr();
         document.getElementById('startDate').value = todayStr;
         document.getElementById('endDate').value = todayStr;
 
@@ -137,18 +380,18 @@
             
             try {
                 if (range === 'today') {
-                    start = end = date.toISOString().split('T')[0];
+                    start = end = getLocalDateStr(date);
                 } else if (range === 'week') {
                     const day = date.getDay() || 7;
-                    date.setHours(-24 * (day - 1));
-                    start = date.toISOString().split('T')[0];
-                    end = new Date().toISOString().split('T')[0];
+                    date.setDate(date.getDate() - (day - 1));
+                    start = getLocalDateStr(date);
+                    end = getLocalDateStr(new Date());
                 } else if (range === 'month') {
-                    start = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
-                    end = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
+                    start = getLocalDateStr(new Date(date.getFullYear(), date.getMonth(), 1));
+                    end = getLocalDateStr(new Date(date.getFullYear(), date.getMonth() + 1, 0));
                 } else if (range === 'year') {
-                    start = new Date(date.getFullYear(), 0, 1).toISOString().split('T')[0];
-                    end = new Date(date.getFullYear(), 11, 31).toISOString().split('T')[0];
+                    start = getLocalDateStr(new Date(date.getFullYear(), 0, 1));
+                    end = getLocalDateStr(new Date(date.getFullYear(), 11, 31));
                 }
                 
                 document.getElementById('startDate').value = start;
@@ -215,11 +458,11 @@
                                 <span class="item-name">${esc(i.name)}</span>
                                 <span class="item-ref">REF: #${i.item_id}</span>
                             </td>
-                            <td style="color: #64748b; font-size: 0.85rem;">
+                            <td style="color: rgba(255, 255, 255, 0.6); font-size: 0.85rem;">
                                 ${i.category ? esc(i.category) : 'Standard Item'}
                             </td>
                             <td style="text-align: center; font-weight: 600;">${Number(i.quantity)}</td>
-                            <td style="text-align: right; font-weight: 700; color: #1e293b;">${formatCurrency(i.subtotal)}</td>
+                            <td style="text-align: right; font-weight: 700; color: #ffffff;">${formatCurrency(i.subtotal)}</td>
                         </tr>
                     `).join('');
                 }
@@ -247,7 +490,7 @@
             }
             const csvFile = new Blob([csv.join('\n')], { type: 'text/csv' });
             const downloadLink = document.createElement('a');
-            downloadLink.download = `${tableId}_${new Date().toISOString().split('T')[0]}.csv`;
+            downloadLink.download = `${tableId}_${getLocalDateStr()}.csv`;
             downloadLink.href = window.URL.createObjectURL(csvFile);
             downloadLink.style.display = 'none';
             document.body.appendChild(downloadLink);
@@ -258,7 +501,35 @@
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user || user.role !== 'admin') window.location.href = '../index.html';
 
+        async function checkPendingPayments() {
+            try {
+                const response = await apiFetch('/payments/pending-count');
+                const badge = document.getElementById('pendingBadge');
+                if (badge) {
+                    if (response.count > 0) {
+                        badge.textContent = response.count;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            } catch (err) { console.error(err); }
+        }
+
         generateReports();
+        checkPendingPayments();
+        setInterval(checkPendingPayments, 30000);
+
+        // Realtime WebSockets updates to keep transaction history up-to-date
+        if (typeof socket !== 'undefined' && socket) {
+            const reloadHistory = () => {
+                generateReports();
+                checkPendingPayments();
+            };
+            socket.on('order_update', reloadHistory);
+            socket.on('payment_update', reloadHistory);
+        }
+
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
     </script>
 </body>

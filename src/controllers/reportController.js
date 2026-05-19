@@ -9,11 +9,11 @@ exports.getSalesReport = async (req, res) => {
     }
     try {
         const [rows] = await db.execute(`
-            SELECT DATE(o.created_at) as date, u.username as cashier_name, SUM(o.total_amount) as total_sales, COUNT(*) as order_count
+            SELECT DATE(o.created_at) as date, COALESCE(u.username, o.platform, 'Delivery') as cashier_name, SUM(o.total_amount) as total_sales, COUNT(*) as order_count
             FROM orders o
-            JOIN users u ON o.cashier_id = u.id
+            LEFT JOIN users u ON o.cashier_id = u.id
             WHERE o.payment_status = 'paid' AND o.created_at BETWEEN ? AND ?
-            GROUP BY DATE(o.created_at), o.cashier_id
+            GROUP BY DATE(o.created_at), o.cashier_id, o.platform
             ORDER BY date DESC, total_sales DESC
         `, [`${startDate} 00:00:00`, `${endDate} 23:59:59`]);
         res.json({ success: true, data: rows });
@@ -41,7 +41,7 @@ exports.getProfitLossReport = async (req, res) => {
     }
     try {
         const [sales] = await db.execute('SELECT SUM(total_amount) as total FROM orders WHERE payment_status = "paid" AND created_at BETWEEN ? AND ?', [`${startDate} 00:00:00`, `${endDate} 23:59:59`]);
-        const [expenses] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE expense_date BETWEEN ? AND ?', [startDate, endDate]);
+        const [expenses] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE category != "Salaries" AND expense_date BETWEEN ? AND ?', [startDate, endDate]);
         const [payroll] = await db.execute('SELECT SUM(amount) as total FROM worker_payments WHERE payment_date BETWEEN ? AND ?', [startDate, endDate]);
         
         const totalSales = Number(sales[0].total) || 0;
@@ -76,13 +76,15 @@ exports.getTransactionHistory = async (req, res) => {
     }
     try {
         const [rows] = await db.execute(`
-            SELECT o.*, o.customer_name, u.username as cashier_name, p.methods as payment_method, p.receipts as transaction_id,
+            SELECT o.*, o.customer_name, COALESCE(u.username, o.platform, 'Delivery') as cashier_name, 
+                   COALESCE(p.methods, o.platform, 'M-Pesa') as payment_method, 
+                   COALESCE(p.receipts, o.platform_order_id, '—') as transaction_id,
                    (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', i.name) SEPARATOR ', ') 
                     FROM order_items oi 
                     JOIN inventory i ON oi.item_id = i.id 
                     WHERE oi.order_id = o.id) as items_list
             FROM orders o
-            JOIN users u ON o.cashier_id = u.id
+            LEFT JOIN users u ON o.cashier_id = u.id
             LEFT JOIN (
                 SELECT order_id, 
                        GROUP_CONCAT(DISTINCT payment_method SEPARATOR ', ') as methods,
@@ -111,7 +113,7 @@ exports.getPopularItems = async (req, res) => {
             WHERE o.payment_status = 'paid'
             GROUP BY i.id
             ORDER BY total_sold DESC
-            LIMIT 10
+            LIMIT 4
         `);
         res.json({ success: true, data: rows });
     } catch (err) {

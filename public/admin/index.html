@@ -14,14 +14,18 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html" class="active"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
                 <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="stocks.html"><i class="fas fa-warehouse"></i> Stocks</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
-                <li><a href="customers.html"><i class="fas fa-user-friends"></i> Customers</a></li>
+                
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
@@ -34,6 +38,8 @@
                 </div>
                 <div id="userInfo" style="color: #ffffff; font-weight: 600;"></div>
             </header>
+
+
 
             <div class="overview-grid">
                 <div class="dashboard-card">
@@ -59,7 +65,7 @@
                 <button class="quick-action-button" onclick="navigateTo('inventory.html')"><i class="fas fa-warehouse"></i> Inventory</button>
                 <button class="quick-action-button" onclick="navigateTo('reports.html')"><i class="fas fa-chart-line"></i> Reports</button>
                 <button class="quick-action-button" onclick="navigateTo('users.html')"><i class="fas fa-users"></i> Users</button>
-                <button class="quick-action-button" onclick="navigateTo('customers.html')"><i class="fas fa-user-friends"></i> Customers</button>
+                
                 <button class="quick-action-button" onclick="navigateTo('../cashier/index.html')"><i class="fas fa-cash-register"></i> POS</button>
                 <button class="quick-action-button" onclick="navigateTo('../cashier/orders.html')"><i class="fas fa-check-double"></i> Confirm Payments</button>
             </div>
@@ -135,7 +141,7 @@
                 <section class="top-products-panel">
                     <div class="panel-header">
                         <div>
-                            <h3>Top 15 Fast Moving Products</h3>
+                            <h3>Top 4 Fast Moving Products</h3>
                             <p class="card-small">Track the highest-selling items and the revenue they generate.</p>
                         </div>
                         <span class="badge badge-info">Top Sellers</span>
@@ -169,7 +175,8 @@
 
             </div>
 
-            <div class="glass-card">
+
+            <div class="glass-card" style="margin-top:2rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="color: #ffffff; font-weight: 800;">Recent Transactions</h3>
                     <a href="reports.html" class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; background: var(--glass);">View Full Sales</a>

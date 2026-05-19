@@ -100,6 +100,28 @@ body::before {
     background: linear-gradient(135deg, var(--primary-hover), var(--accent-cyan));
 }
 
+.btn-success {
+    background: linear-gradient(135deg, var(--accent-success), #059669);
+    color: white;
+    box-shadow: 0 16px 35px rgba(16, 185, 129, 0.25);
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--accent-danger), #dc2626);
+    color: white;
+    box-shadow: 0 16px 35px rgba(239, 68, 68, 0.25);
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
 /* Forms */
 .form-group {
     margin-bottom: 1.5rem;
@@ -1014,9 +1036,11 @@ span[style*="color: var(--text-gray)"] {
     background-repeat: no-repeat;
     background-position: center;
     background-size: 70%;
-    opacity: 0.08;
+    opacity: 0.04;
     pointer-events: none;
     z-index: 0;
+    filter: invert(1) grayscale(100%);
+    mix-blend-mode: screen;
 }
 
 .info-grid {

@@ -8,6 +8,7 @@ router.get('/', verifyToken, isCashier, inventoryController.getItems);
 router.post('/', verifyToken, isAdmin, inventoryController.addItem);
 router.put('/:id', verifyToken, isAdmin, inventoryController.updateItem);
 router.put('/restock/:id', verifyToken, isAdmin, inventoryController.restockItem);
+router.put('/use/:id', verifyToken, isAdmin, inventoryController.recordUsage);
 router.delete('/:id', verifyToken, isAdmin, inventoryController.deleteItem);
 
 

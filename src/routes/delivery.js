@@ -14,5 +14,7 @@ router.post('/orders/:id/status', verifyToken, isCashier, deliveryController.upd
 router.post('/settlements', verifyToken, isAdmin, deliveryController.recordSettlement);
 router.get('/reports/reconciliation', verifyToken, isAdmin, deliveryController.getReconciliationReport);
 router.get('/reports/stats', verifyToken, isAdmin, deliveryController.getDeliveryStats);
+router.get('/commissions', verifyToken, isAdmin, deliveryController.getCommissions);
+router.post('/commissions', verifyToken, isAdmin, deliveryController.saveCommissions);
 
 module.exports = router;

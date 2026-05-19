@@ -68,9 +68,9 @@ exports.createOrder = async (req, res) => {
 exports.getOrders = async (req, res) => {
     try {
         const [rows] = await db.execute(`
-            SELECT o.*, u.username as cashier_name 
+            SELECT o.*, COALESCE(u.username, o.platform, 'Delivery') as cashier_name 
             FROM orders o 
-            JOIN users u ON o.cashier_id = u.id 
+            LEFT JOIN users u ON o.cashier_id = u.id 
             WHERE o.status != 'merged'
             ORDER BY o.created_at DESC
         `);
@@ -98,14 +98,20 @@ exports.getOrderDetails = async (req, res) => {
             WHERE oi.order_id = ?
         `, [id]);
 
+        const [settingsRows] = await db.execute('SELECT * FROM receipt_settings WHERE id = 1');
+        const settings = settingsRows[0] || {};
+
         res.json({ 
             success: true, 
             data: { 
                 ...order[0], 
                 items,
-                hotel_name: 'TABARUQ FOODS',
-                mpesa_paybill: process.env.MPESA_C2B_SHORTCODE || '600000',
-                mpesa_till: process.env.MPESA_STK_SHORTCODE || '174379'
+                hotel_name: settings.hotel_name || 'TABARUQ FOODS',
+                phone_number: settings.phone_number || '',
+                address: settings.address || '',
+                mpesa_paybill: settings.mpesa_paybill || '600000',
+                mpesa_till: settings.mpesa_till || '174379',
+                footer_message: settings.footer_message || 'Thank you for dining with us!'
             } 
         });
     } catch (err) {

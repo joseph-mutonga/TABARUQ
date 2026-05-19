@@ -13,7 +13,7 @@
         <aside class="sidebar">
             <h2>TABARUQ</h2>
             <ul class="nav-links">
-                <li><a href="index.html"><i class="fas fa-plus-circle"></i> New Order</a></li>
+                <li><a href="index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
                 <li id="ordersNavLink" style="display:none;"><a href="orders.html" class="active"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
                 <li id="deliveryNavLink" style="display:none;"><a href="../admin/delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
@@ -557,9 +557,12 @@
                 `).join('');
 
                 const hotelName = order.hotel_name || 'TABARUQ FOODS';
+                const phoneNum = order.phone_number || '';
+                const addressStr = order.address || '';
                 const cashierName = order.cashier_name || 'System';
                 const paybillNum = order.mpesa_paybill || '600000';
                 const tillNum = order.mpesa_till || '174379';
+                const footerMsg = order.footer_message || 'Thank you for dining with us!';
 
                 printWindow.document.write(`
                     <html>
@@ -577,6 +580,8 @@
                     <body>
                         <div class="header">
                             <h2 style="margin: 0; font-size: 18px; letter-spacing: 1px;">${hotelName}</h2>
+                            ${addressStr ? `<p style="margin: 3px 0 0 0; font-size: 12px;">${addressStr}</p>` : ''}
+                            ${phoneNum ? `<p style="margin: 3px 0 0 0; font-size: 12px;">Tel: ${phoneNum}</p>` : ''}
                             <p style="margin: 5px 0 0 0; font-size: 12px;">*** RECEIPT / BILL ***</p>
                         </div>
                         <div style="margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 8px;">
@@ -596,7 +601,7 @@
                             <div class="meta-item"><span>M-Pesa Till:</span> <strong>${tillNum}</strong></div>
                         </div>
                         <div class="footer">
-                            <p style="margin: 5px 0;">Thank you for dining with us!</p>
+                            <p style="margin: 5px 0;">${footerMsg}</p>
                             <p style="margin: 5px 0;">Powered by TABARUQ Foods POS</p>
                         </div>
                         <script>

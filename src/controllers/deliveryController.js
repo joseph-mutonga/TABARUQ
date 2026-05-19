@@ -1,5 +1,25 @@
 const db = require('../config/db');
 
+// Initialize database table if not exists
+(async () => {
+    try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS platform_commissions (
+                platform VARCHAR(50) PRIMARY KEY,
+                commission_percentage DECIMAL(5, 2) DEFAULT 0.00
+            )
+        `);
+        // Seed initial values for platforms if not present
+        await db.execute(`INSERT IGNORE INTO platform_commissions (platform, commission_percentage) VALUES 
+            ('Uber Eats', 0.00),
+            ('Glovo', 0.00),
+            ('Bolt Food', 0.00)
+        `);
+    } catch (err) {
+        console.error('Failed to initialize platform_commissions table:', err);
+    }
+})();
+
 /**
  * Delivery Module Controller
  * Handles Uber Eats, Bolt Food, Glovo webhooks and reconciliation.
@@ -108,7 +128,7 @@ exports.updateDeliveryStatus = async (req, res) => {
 
 // 3. Payment Reconciliation
 exports.recordSettlement = async (req, res) => {
-    const { platform, payout_id, amount, date_received, orderIds } = req.body;
+    const { platform, payout_id, amount, date_received } = req.body;
 
     const connection = await db.getConnection();
     try {
@@ -121,22 +141,70 @@ exports.recordSettlement = async (req, res) => {
         );
         const settlementId = result.insertId;
 
-        // Link orders to settlement and mark them paid
-        if (orderIds && orderIds.length > 0) {
-            for (const orderId of orderIds) {
+        // Fetch platform commission percentage
+        const [commissions] = await connection.execute(
+            'SELECT commission_percentage FROM platform_commissions WHERE platform = ?',
+            [platform]
+        );
+        const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
+
+        // Fetch all pending orders for this platform in FIFO order (oldest first)
+        const [pendingOrders] = await connection.execute(
+            "SELECT id, total_amount, customer_name FROM orders WHERE platform = ? AND payment_status != 'paid' ORDER BY created_at ASC",
+            [platform]
+        );
+
+        let remainingAmount = Number(amount) || 0;
+
+        for (const order of pendingOrders) {
+            const orderTotal = Number(order.total_amount) || 0;
+            const feeAmount = orderTotal * (commissionPct / 100);
+            const netAmount = orderTotal - feeAmount;
+
+            // Stop if the remaining settlement amount cannot cover the net order total (allowing 0.1 rounding tolerance)
+            if (remainingAmount < netAmount - 0.1) {
+                break;
+            }
+
+            // Link order to settlement
+            await connection.execute(
+                'INSERT INTO order_settlements (order_id, settlement_id) VALUES (?, ?)',
+                [order.id, settlementId]
+            );
+
+            // Mark order as paid
+            await connection.execute(
+                "UPDATE orders SET payment_status = 'paid' WHERE id = ?",
+                [order.id]
+            );
+
+            // Record platform fee if commission is set
+            if (commissionPct > 0) {
                 await connection.execute(
-                    'INSERT INTO order_settlements (order_id, settlement_id) VALUES (?, ?)',
-                    [orderId, settlementId]
-                );
-                await connection.execute(
-                    "UPDATE orders SET payment_status = 'paid' WHERE id = ?",
-                    [orderId]
+                    'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
+                    [order.id, commissionPct, feeAmount]
                 );
             }
+
+            // Insert payment record so it registers in transaction reports/history (using netAmount!)
+            await connection.execute(
+                'INSERT INTO payments (order_id, amount, transaction_id, payment_method, status, customer_name, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [
+                    order.id,
+                    netAmount,
+                    payout_id,
+                    platform,
+                    'confirmed',
+                    order.customer_name || 'Delivery Customer',
+                    date_received
+                ]
+            );
+
+            remainingAmount -= netAmount;
         }
 
         await connection.commit();
-        res.json({ success: true, settlementId, message: 'Settlement recorded and orders reconciled' });
+        res.json({ success: true, settlementId, message: 'Settlement recorded and orders reconciled auto-sequentially' });
     } catch (err) {
         await connection.rollback();
         console.error(err);
@@ -154,35 +222,60 @@ exports.getReconciliationReport = async (req, res) => {
                 platform,
                 COUNT(id) as total_orders,
                 SUM(total_amount) as gross_revenue,
-                SUM(CASE WHEN payment_status = 'paid' THEN total_amount ELSE 0 END) as settled_revenue,
+                SUM(CASE WHEN payment_status = 'paid' THEN 
+                    COALESCE(
+                        (SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id AND payments.status = 'confirmed'),
+                        total_amount
+                    )
+                ELSE 0 END) as settled_revenue,
+                SUM(CASE WHEN payment_status = 'paid' THEN 
+                    COALESCE(
+                        (SELECT SUM(fee_amount) FROM platform_fees WHERE platform_fees.order_id = orders.id),
+                        0
+                    )
+                ELSE 0 END) as commission_fees,
                 SUM(CASE WHEN payment_status != 'paid' THEN total_amount ELSE 0 END) as pending_revenue
             FROM orders 
             WHERE platform IS NOT NULL
             GROUP BY platform
         `);
 
-        // Commissions/Fees
-        const [fees] = await db.execute(`
-            SELECT 
-                o.platform,
-                SUM(f.fee_amount) as total_fees
-            FROM platform_fees f
-            JOIN orders o ON f.order_id = o.id
-            GROUP BY o.platform
-        `);
-
-        // Merge results
-        const report = summary.map(s => {
-            const platformFee = fees.find(f => f.platform === s.platform)?.total_fees || 0;
-            return {
-                ...s,
-                total_fees: platformFee,
-                net_revenue: s.gross_revenue - platformFee
-            };
-        });
-
-        res.json({ success: true, data: report });
+        res.json({ success: true, data: summary });
     } catch (err) {
+        console.error('getReconciliationReport Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// Commission Settings Controllers
+exports.getCommissions = async (req, res) => {
+    try {
+        const [rows] = await db.execute('SELECT * FROM platform_commissions');
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('getCommissions Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.saveCommissions = async (req, res) => {
+    const { uber_percentage, glovo_percentage, bolt_percentage } = req.body;
+    try {
+        await db.execute(
+            'UPDATE platform_commissions SET commission_percentage = ? WHERE platform = ?',
+            [parseFloat(uber_percentage || 0), 'Uber Eats']
+        );
+        await db.execute(
+            'UPDATE platform_commissions SET commission_percentage = ? WHERE platform = ?',
+            [parseFloat(glovo_percentage || 0), 'Glovo']
+        );
+        await db.execute(
+            'UPDATE platform_commissions SET commission_percentage = ? WHERE platform = ?',
+            [parseFloat(bolt_percentage || 0), 'Bolt Food']
+        );
+        res.json({ success: true, message: 'Platform commission settings updated successfully' });
+    } catch (err) {
+        console.error('saveCommissions Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
