@@ -98,6 +98,10 @@ function buildStkCallbackDisplayMessage(resultDesc, amountDecimal, payerName, ph
 
 exports.initiateSTKPush = async (req, res) => {
     const { phoneNumber, amount, orderId, customer_name, skipSTK, paymentId } = req.body;
+    let cleanCustomerName = customer_name || 'Guest';
+    if (cleanCustomerName.length > 255) {
+        cleanCustomerName = cleanCustomerName.substring(0, 252) + '...';
+    }
 
     try {
         // 1. Create/Update payment record in DB
@@ -112,12 +116,12 @@ exports.initiateSTKPush = async (req, res) => {
         if (targetPaymentId) {
             await db.execute(
                 'UPDATE payments SET amount = ?, phone_number = ?, mpesa_checkout_id = ?, status = "pending", customer_name = ? WHERE id = ?',
-                [amount, phoneNumber || null, checkoutID, customer_name || 'Guest', targetPaymentId]
+                [amount, phoneNumber || null, checkoutID, cleanCustomerName, targetPaymentId]
             );
         } else {
             const [result] = await db.execute(
                 'INSERT INTO payments (order_id, amount, phone_number, mpesa_checkout_id, status, customer_name) VALUES (?, ?, ?, ?, ?, ?)',
-                [orderId, amount, phoneNumber || null, checkoutID, 'pending', customer_name || 'Guest']
+                [orderId, amount, phoneNumber || null, checkoutID, 'pending', cleanCustomerName]
             );
             targetPaymentId = result.insertId;
         }
@@ -213,7 +217,10 @@ exports.mpesaCallback = async (req, res) => {
             const first = items.find((item) => item.Name === 'FirstName')?.Value;
             const middle = items.find((item) => item.Name === 'MiddleName')?.Value;
             const last = items.find((item) => item.Name === 'LastName')?.Value;
-            const payerName = [first, middle, last].filter(Boolean).join(' ').trim() || undefined;
+            let payerName = [first, middle, last].filter(Boolean).join(' ').trim() || undefined;
+            if (payerName && payerName.length > 255) {
+                payerName = payerName.substring(0, 252) + '...';
+            }
             const txDate = items.find((item) => item.Name === 'TransactionDate')?.Value;
 
             const amountNum = amountPaid != null && amountPaid !== '' ? Number(amountPaid) : null;
@@ -355,8 +362,11 @@ exports.mpesaC2BConfirmation = async (req, res) => {
             return res.json({ ResultCode: 0, ResultDesc: 'Success' });
         }
 
-        const customerName =
+        let customerName =
             `${FirstName || ''} ${MiddleName || ''} ${LastName || ''}`.trim() || 'M-Pesa Customer';
+        if (customerName.length > 255) {
+            customerName = customerName.substring(0, 252) + '...';
+        }
 
         let orderId = null;
 
@@ -456,53 +466,93 @@ exports.getPayments = async (req, res) => {
     try {
         let query = 'SELECT p.*, o.total_amount, o.customer_name as order_customer_name, u.username as confirmed_by_user FROM payments p LEFT JOIN orders o ON p.order_id = o.id LEFT JOIN users u ON p.confirmed_by = u.id';
         let params = [];
-        
+
         if (req.query.status === 'incomplete') {
+            // === Part 1: All unpaid/incomplete orders (one row per order) ===
+            // Start from every order that is not paid/cancelled/merged
+            // LEFT JOIN to the single most relevant non-confirmed payment for that order (if any)
+            // This guarantees every unpaid order appears exactly once.
             query = `
-                SELECT p.*, o.total_amount, o.customer_name as order_customer_name, u.username as confirmed_by_user 
-                FROM payments p 
-                LEFT JOIN orders o ON p.order_id = o.id 
-                LEFT JOIN users u ON p.confirmed_by = u.id
-                WHERE p.status != 'confirmed' 
-                  AND (o.id IS NULL OR (o.payment_status != 'paid' AND o.status != 'cancelled' AND o.status != 'merged' AND o.platform IS NULL))
-                
-                UNION
-                
-                SELECT 
-                    NULL as id, 
-                    o.id as order_id, 
-                    o.total_amount as amount, 
-                    NULL as transaction_id, 
-                    NULL as phone_number, 
-                    COALESCE(o.platform, 'Pending') as payment_method, 
-                    'pending' as status, 
-                    NULL as mpesa_checkout_id, 
-                    o.created_at, 
-                    NULL as confirmed_at, 
-                    NULL as confirmed_by, 
-                    o.customer_name, 
-                    CASE 
-                        WHEN o.platform IS NOT NULL THEN CONCAT('Delivery Order: ', o.platform)
-                        ELSE 'No payment attempt yet' 
-                    END as mpesa_result_message,
+                SELECT
+                    p.id,
+                    o.id AS order_id,
+                    COALESCE(p.amount, o.total_amount) AS amount,
+                    p.transaction_id,
+                    p.phone_number,
+                    COALESCE(p.payment_method,
+                        CASE WHEN o.platform IS NOT NULL THEN o.platform ELSE 'Pending' END
+                    ) AS payment_method,
+                    COALESCE(p.status, 'pending') AS status,
+                    p.mpesa_checkout_id,
+                    o.created_at,
+                    p.confirmed_at,
+                    p.confirmed_by,
+                    COALESCE(p.customer_name, o.customer_name) AS customer_name,
+                    COALESCE(p.mpesa_result_message,
+                        CASE WHEN o.platform IS NOT NULL
+                             THEN CONCAT('Delivery Order: ', o.platform)
+                             ELSE 'No payment attempt yet'
+                        END
+                    ) AS mpesa_result_message,
                     o.total_amount,
-                    o.customer_name as order_customer_name,
-                    NULL as confirmed_by_user
+                    o.customer_name AS order_customer_name,
+                    u.username AS confirmed_by_user
                 FROM orders o
-                WHERE o.payment_status IN ('pending', 'partial') 
-                  AND o.status != 'cancelled'
-                  AND o.status != 'merged'
-                  AND o.platform IS NULL
-                  AND NOT EXISTS (SELECT 1 FROM payments p2 WHERE p2.order_id = o.id AND p2.status != 'confirmed')
+                LEFT JOIN payments p
+                    ON p.order_id = o.id
+                    AND p.status != 'confirmed'
+                    AND p.id = (
+                        SELECT p2.id FROM payments p2
+                        WHERE p2.order_id = o.id
+                          AND p2.status != 'confirmed'
+                        ORDER BY
+                            CASE WHEN p2.status = 'pending' AND p2.transaction_id IS NOT NULL THEN 0
+                                 WHEN p2.status = 'pending' THEN 1
+                                 ELSE 2
+                            END ASC,
+                            p2.id DESC
+                        LIMIT 1
+                    )
+                LEFT JOIN users u ON p.confirmed_by = u.id
+                WHERE o.payment_status != 'paid'
+                  AND o.status NOT IN ('cancelled', 'merged')
+
+                UNION ALL
+
+                -- === Part 2: Unlinked payments (no order attached) ===
+                SELECT
+                    p.id,
+                    p.order_id,
+                    p.amount,
+                    p.transaction_id,
+                    p.phone_number,
+                    p.payment_method,
+                    p.status,
+                    p.mpesa_checkout_id,
+                    p.created_at,
+                    p.confirmed_at,
+                    p.confirmed_by,
+                    p.customer_name,
+                    p.mpesa_result_message,
+                    NULL AS total_amount,
+                    NULL AS order_customer_name,
+                    u.username AS confirmed_by_user
+                FROM payments p
+                LEFT JOIN users u ON p.confirmed_by = u.id
+                WHERE p.status != 'confirmed'
+                  AND p.order_id IS NULL
             `;
         }
-        
-        const [rows] = await db.execute(query + ' ORDER BY COALESCE(confirmed_at, created_at) DESC, id DESC LIMIT 100', params);
+
+        const [rows] = await db.execute(query + ' ORDER BY COALESCE(confirmed_at, created_at) DESC, id DESC LIMIT 200', params);
         res.json({ success: true, data: rows });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+
 
 exports.getPendingCount = async (req, res) => {
     try {
@@ -605,7 +655,10 @@ exports.recordOfflineMpesa = async (req, res) => {
 
         const phone = phone_number != null ? String(phone_number).trim() : '';
         const nameFromReq = customer_name != null ? String(customer_name).trim() : '';
-        const custMerge = nameFromReq || null;
+        let custMerge = nameFromReq || null;
+        if (custMerge && custMerge.length > 255) {
+            custMerge = custMerge.substring(0, 252) + '...';
+        }
 
         const [dup] = await conn.execute(
             "SELECT id FROM payments WHERE transaction_id = ? AND transaction_id IS NOT NULL AND TRIM(transaction_id) <> ''",
@@ -658,7 +711,10 @@ exports.recordOfflineMpesa = async (req, res) => {
                 [cleanReceipt, payAmount, phone, req.user.id, msg, custMerge, pendingRow.id, oid]
             );
         } else {
-            const cust = nameFromReq || order.customer_name || 'Guest';
+            let cust = nameFromReq || order.customer_name || 'Guest';
+            if (cust.length > 255) {
+                cust = cust.substring(0, 252) + '...';
+            }
             await conn.execute(
                 'INSERT INTO payments (order_id, amount, transaction_id, phone_number, payment_method, status, confirmed_at, confirmed_by, customer_name, mpesa_result_message) VALUES (?, ?, ?, NULLIF(?, ""), ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)',
                 [oid, payAmount, cleanReceipt, phone, 'M-Pesa (Offline)', 'confirmed', req.user.id, cust, msg]
@@ -693,9 +749,13 @@ exports.recordOfflineMpesa = async (req, res) => {
  */
 exports.getUnlinkedIncoming = async (req, res) => {
     try {
-        const [rows] = await db.execute(
-            `SELECT id, amount, transaction_id, phone_number, payment_method, status, mpesa_checkout_id,
-                    created_at, confirmed_at, customer_name, mpesa_result_message
+        // Optional: filter by amount (order total) with ±1 KES tolerance
+        const filterAmount = req.query.amount != null ? Number(req.query.amount) : null;
+        const hasAmountFilter = filterAmount != null && !Number.isNaN(filterAmount) && filterAmount > 0;
+
+        let sql = `
+            SELECT id, amount, transaction_id, phone_number, payment_method, status, mpesa_checkout_id,
+                   created_at, confirmed_at, customer_name, mpesa_result_message
              FROM payments
              WHERE (
                     (order_id IS NULL AND status IN ('confirmed', 'pending'))
@@ -716,9 +776,19 @@ exports.getUnlinkedIncoming = async (req, res) => {
                    AND p2.status = 'confirmed'
                    AND p2.id <> payments.id
                )
-             ORDER BY COALESCE(confirmed_at, created_at) DESC, id DESC`
-        );
-        res.json({ success: true, data: rows });
+        `;
+
+        const params = [];
+        if (hasAmountFilter) {
+            // Only show messages whose amount is within ±1 KES of the order total
+            sql += ` AND ABS(CAST(amount AS DECIMAL(10,2)) - ?) <= 1.00`;
+            params.push(filterAmount);
+        }
+
+        sql += ` ORDER BY COALESCE(confirmed_at, created_at) DESC, id DESC`;
+
+        const [rows] = await db.execute(sql, params);
+        res.json({ success: true, data: rows, amountFilter: hasAmountFilter ? filterAmount : null });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -854,5 +924,39 @@ exports.registerC2BURLs = async (req, res) => {
     } catch (error) {
         console.error('C2B Register Error:', error.response?.data || error.message);
         res.status(500).json({ success: false, message: 'Failed to register C2B URLs', error: error.response?.data });
+    }
+};
+
+exports.deletePayment = async (req, res) => {
+    const { id } = req.params;
+    let conn;
+    try {
+        conn = await db.getConnection();
+        await conn.beginTransaction();
+
+        // Get the payment first to know the orderId
+        const [paymentRows] = await conn.execute('SELECT order_id FROM payments WHERE id = ? FOR UPDATE', [id]);
+        if (paymentRows.length === 0) {
+            await conn.rollback();
+            return res.status(404).json({ success: false, message: 'Payment not found' });
+        }
+        const orderId = paymentRows[0].order_id;
+
+        // Delete the payment record
+        await conn.execute('DELETE FROM payments WHERE id = ?', [id]);
+
+        // If it was linked to an order, update the order status
+        if (orderId) {
+            await checkAndCompleteOrder(conn, orderId);
+        }
+
+        await conn.commit();
+        res.json({ success: true, message: 'Payment deleted successfully' });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    } finally {
+        if (conn) conn.release();
     }
 };

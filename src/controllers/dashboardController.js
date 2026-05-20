@@ -30,10 +30,10 @@ exports.getStats = async (req, res) => {
         const [[storesCount]] = await db.execute('SELECT COUNT(DISTINCT supplier) as total FROM inventory WHERE supplier IS NOT NULL AND supplier != ""');
         const [[supplierValue]] = await db.execute('SELECT SUM(cost_price * quantity) as total FROM inventory');
         const [topProducts] = await db.execute(`
-            SELECT i.name, SUM(oi.quantity) as sold, SUM(oi.subtotal) as revenue
+            SELECT COALESCE(oi.item_name, i.name, 'Unknown Item') as name, SUM(oi.quantity) as sold, SUM(oi.subtotal) as revenue
             FROM order_items oi
-            JOIN inventory i ON oi.item_id = i.id
-            GROUP BY oi.item_id
+            LEFT JOIN inventory i ON oi.item_id = i.id
+            GROUP BY name
             ORDER BY sold DESC
             LIMIT 4
         `);

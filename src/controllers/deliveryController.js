@@ -15,6 +15,15 @@ const db = require('../config/db');
             ('Glovo', 0.00),
             ('Bolt Food', 0.00)
         `);
+        // Add index on orders(created_at) if not exists
+        try {
+            await db.execute('ALTER TABLE orders ADD INDEX idx_orders_created_at (created_at)');
+            console.log('Added index idx_orders_created_at to orders');
+        } catch (e) {
+            if (e.code !== 'ER_DUP_KEYNAME') {
+                console.error('Failed to add index idx_orders_created_at:', e);
+            }
+        }
     } catch (err) {
         console.error('Failed to initialize platform_commissions table:', err);
     }
@@ -69,12 +78,28 @@ exports.handleWebhookOrder = async (req, res) => {
             );
         }
 
-        // Save fees if provided
-        for (const fee of fees) {
-            await connection.execute(
-                'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
-                [internalOrderId, fee.percentage, fee.amount]
+        // Save fees if provided, otherwise fetch platform settings and calculate
+        if (fees && fees.length > 0) {
+            for (const fee of fees) {
+                await connection.execute(
+                    'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
+                    [internalOrderId, fee.percentage, fee.amount]
+                );
+            }
+        } else {
+            // Fetch platform commission percentage
+            const [commissions] = await connection.execute(
+                'SELECT commission_percentage FROM platform_commissions WHERE platform = ?',
+                [platform]
             );
+            const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
+            if (commissionPct > 0) {
+                const feeAmount = Number(total) * (commissionPct / 100);
+                await connection.execute(
+                    'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
+                    [internalOrderId, commissionPct, feeAmount]
+                );
+            }
         }
 
         await connection.commit();
@@ -178,8 +203,12 @@ exports.recordSettlement = async (req, res) => {
                 [order.id]
             );
 
-            // Record platform fee if commission is set
-            if (commissionPct > 0) {
+            // Record platform fee if commission is set and not already recorded
+            const [existingFee] = await connection.execute(
+                'SELECT id FROM platform_fees WHERE order_id = ?',
+                [order.id]
+            );
+            if (existingFee.length === 0 && commissionPct > 0) {
                 await connection.execute(
                     'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
                     [order.id, commissionPct, feeAmount]
@@ -219,25 +248,28 @@ exports.getReconciliationReport = async (req, res) => {
         // Total orders vs Settled amount
         const [summary] = await db.execute(`
             SELECT 
-                platform,
-                COUNT(id) as total_orders,
-                SUM(total_amount) as gross_revenue,
-                SUM(CASE WHEN payment_status = 'paid' THEN 
+                pc.platform,
+                pc.commission_percentage,
+                COUNT(o.id) as total_orders,
+                COALESCE(SUM(o.total_amount), 0) as gross_revenue,
+                COUNT(CASE WHEN YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1) THEN o.id END) as weekly_orders,
+                COALESCE(SUM(CASE WHEN YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1) THEN o.total_amount ELSE 0 END), 0) as weekly_revenue,
+                COALESCE(SUM(CASE WHEN o.payment_status = 'paid' THEN 
                     COALESCE(
-                        (SELECT SUM(amount) FROM payments WHERE payments.order_id = orders.id AND payments.status = 'confirmed'),
-                        total_amount
+                        (SELECT SUM(p.amount) FROM payments p WHERE p.order_id = o.id AND p.status = 'confirmed'),
+                        o.total_amount
                     )
-                ELSE 0 END) as settled_revenue,
-                SUM(CASE WHEN payment_status = 'paid' THEN 
+                ELSE 0 END), 0) as settled_revenue,
+                COALESCE(SUM(
                     COALESCE(
-                        (SELECT SUM(fee_amount) FROM platform_fees WHERE platform_fees.order_id = orders.id),
-                        0
+                        (SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = o.id),
+                        o.total_amount * (pc.commission_percentage / 100)
                     )
-                ELSE 0 END) as commission_fees,
-                SUM(CASE WHEN payment_status != 'paid' THEN total_amount ELSE 0 END) as pending_revenue
-            FROM orders 
-            WHERE platform IS NOT NULL
-            GROUP BY platform
+                ), 0) as commission_fees,
+                COALESCE(SUM(CASE WHEN o.payment_status != 'paid' THEN o.total_amount ELSE 0 END), 0) as pending_revenue
+            FROM platform_commissions pc
+            LEFT JOIN orders o ON o.platform = pc.platform
+            GROUP BY pc.platform, pc.commission_percentage
         `);
 
         res.json({ success: true, data: summary });

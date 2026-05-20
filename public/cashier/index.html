@@ -37,7 +37,7 @@
                     <div id="menuItems" class="item-list"></div>
                 </div>
 
-                <div class="glass-card" style="display: flex; flex-direction: column; max-height: 80vh;">
+                <div class="glass-card" style="display: flex; flex-direction: column; max-height: 85vh; position: sticky; top: 2rem; align-self: start;">
                     <h3 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Current Order</h3>
                     <div id="cartItems" style="flex: 1; overflow-y: auto; margin:1rem 0;">
                         <p style="color: #ffffff; text-align: center; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">No items selected</p>
@@ -257,8 +257,8 @@
         async function loadMenu() {
             try {
                 const response = await apiFetch('/inventory');
-                // Filter out delivery platform-restricted items for POS cashier
-                inventory = response.data.filter(item => !item.delivery_platform);
+                // Filter out delivery platform-restricted items and raw ingredients for POS cashier
+                inventory = response.data.filter(item => !item.delivery_platform && item.item_type !== 'ingredient');
                 renderCategoryFilters(inventory);
                 renderMenu(getFilteredItems());
             } catch (err) { alert(err.message); }
@@ -297,17 +297,32 @@
                 const cartItem = cart.find(c => c.id === item.id);
                 const qty = cartItem ? cartItem.quantity : 0;
                 const isSelected = qty > 0;
+
+                const catLower = (item.category || '').toLowerCase();
+                const nameLower = item.name.toLowerCase();
+                let iconHtml = '<i class="fas fa-bowl-food" style="color: var(--accent-warning); font-size: 1.2rem;"></i>';
+                
+                if (catLower.includes('drink') || catLower.includes('beverage') || nameLower.includes('soda') || nameLower.includes('water') || nameLower.includes('juice')) {
+                    iconHtml = '<i class="fas fa-glass-water" style="color: var(--accent-cyan); font-size: 1.2rem;"></i>';
+                } else if (catLower.includes('fruit') || nameLower.includes('banana') || nameLower.includes('apple') || nameLower.includes('mango')) {
+                    iconHtml = '<i class="fas fa-apple-whole" style="color: #10b981; font-size: 1.2rem;"></i>';
+                } else if (catLower.includes('food') || catLower.includes('meal') || nameLower.includes('beans') || nameLower.includes('ugali') || nameLower.includes('burger') || nameLower.includes('cake') || nameLower.includes('chicken') || nameLower.includes('rice') || nameLower.includes('githeri')) {
+                    iconHtml = '<i class="fas fa-utensils" style="color: var(--accent-magenta); font-size: 1.2rem;"></i>';
+                }
                 
                 return `
                     <div class="product-card ${isSelected ? 'selected-highlight' : ''}" onclick="addToCart(${item.id})" style="cursor: pointer; position: relative;">
-                        <div style="display:flex; justify-content:space-between; gap: 1.5rem; align-items:center;">
-                            <strong>${item.name}</strong>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; align-items:center; gap:0.6rem;">
+                                ${iconHtml}
+                                <strong>${item.name}</strong>
+                            </div>
                             ${isSelected ? `<span class="selected-badge"><i class="fas fa-shopping-basket"></i> ${qty}</span>` : 
                               (!(item.category || '').toLowerCase().includes('food') ? `<span class="badge" style="background: ${item.quantity <= item.low_stock_threshold ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.quantity} ${item.unit}</span>` : '')}
                         </div>
-                        <div class="product-meta">
-                            <span>${item.category || 'Food & Drink'}</span>
-                            <strong>${formatCurrency(item.selling_price)}</strong>
+                        <div class="product-meta" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.5rem;">
+                            <span style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">${item.category || 'Food & Drink'}</span>
+                            <strong style="color: var(--accent-cyan); font-size: 1.1rem;">${formatCurrency(item.selling_price)}</strong>
                         </div>
                     </div>
                 `;
@@ -724,11 +739,8 @@
                             body: JSON.stringify({ orderId: orderResp.orderId, amount: cashAmt })
                         });
                     }
-                    alert(`Split payment initiated.\n- STK: KES ${mpesaAmt}\n- Offline M-Pesa: KES ${offlineAmt}\n- Cash: KES ${cashAmt}`);
-                    cart = [];
-                    renderCart();
-                    document.getElementById('checkoutModal').style.display = 'none';
-                    loadMenu();
+                    alert(`Split payment completed.\n- STK: KES ${mpesaAmt}\n- Offline M-Pesa: KES ${offlineAmt}\n- Cash: KES ${cashAmt}`);
+                    showPostCheckoutModal(orderResp.orderId);
                 }
             } catch (err) {
                 alert(err.message);

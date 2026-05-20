@@ -101,6 +101,16 @@
         </div>
     </div>
 
+    <!-- Delete / Cancel Confirmation Modal -->
+    <div id="deleteConfirmModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:3000; justify-content:center; align-items:center; padding:1rem;">
+        <div class="glass-card" style="max-width:430px; width:100%;" onclick="event.stopPropagation()">
+            <h3 style="color:#fff; font-weight:700; margin-bottom:0.5rem;"><i class="fas fa-trash" style="color:var(--accent-danger);"></i> Delete / Cancel</h3>
+            <p id="deleteModalDesc" style="color:rgba(255,255,255,0.82); font-size:0.9rem; margin-bottom:1.25rem; line-height:1.55;"></p>
+            <div id="deleteModalButtons" style="display:flex; flex-direction:column; gap:0.6rem;"></div>
+            <button class="btn" style="width:100%; margin-top:0.85rem; background:#475569; color:#fff;" onclick="closeDeleteModal()">← Go back, do nothing</button>
+        </div>
+    </div>
+
     <div id="incomingMpesaModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1100; justify-content:center; align-items:center; padding:1rem;">
         <div class="glass-card" style="max-width:560px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
             <h2 style="color:#fff; margin-bottom:0.5rem; font-size:1.15rem;">Record offline M-Pesa</h2>
@@ -234,6 +244,9 @@
                 actionHtml +=
                     '<div style="width:100%; text-align:center; color:var(--accent-success); font-weight:700;"><i class="fas fa-check-circle"></i> Transaction confirmed.</div>';
             }
+            if (user && user.role === 'admin' && p.status !== 'confirmed') {
+                actionHtml += `<button type="button" class="btn-close-premium" style="background: var(--accent-danger); font-size: 0.95rem; padding: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;" onclick="event.stopPropagation();closePaymentDetail();handleDeleteAction(${p.id ? p.id : 'null'}, ${p.order_id ? p.order_id : 'null'})"><i class="fas fa-trash"></i> Delete / Cancel</button>`;
+            }
             actions.innerHTML = actionHtml;
 
             document.getElementById('paymentDetailModal').style.display = 'flex';
@@ -303,25 +316,35 @@
                 return d.innerHTML;
             }
             if (!__incomingList.length) {
+                const amtStr = __incomingOrderTotal ? formatCurrency(__incomingOrderTotal) : '';
                 listEl.innerHTML =
-                    '<p class="card-small" style="color:rgba(255,255,255,0.8);">No unlinked M-Pesa messages yet. Use Refresh after a callback, or enter the receipt manually below.</p>';
+                    `<div style="text-align:center; padding:1rem 0;">
+                        <i class="fas fa-inbox" style="font-size:2rem; color:rgba(255,255,255,0.3); margin-bottom:0.5rem; display:block;"></i>
+                        <p class="card-small" style="color:rgba(255,255,255,0.8);">No M-Pesa messages found for ${amtStr ? '<strong style="color:#fff;">' + amtStr + '</strong>' : 'this order'}.</p>
+                        <p class="card-small" style="color:rgba(255,255,255,0.6); font-size:0.8rem; margin-top:0.25rem;">Ask the customer to send the exact amount, then tap Refresh. Or enter the receipt code manually below.</p>
+                    </div>`;
                 return;
             }
             listEl.innerHTML = __incomingList
                 .map((p) => {
                     const t = p.confirmed_at || p.created_at;
                     const timeStr = t ? new Date(t).toLocaleString() : '—';
+                    // Show full Safaricom message — it contains all the key details
                     const msg = p.mpesa_result_message ? String(p.mpesa_result_message) : '';
-                    const msgShort = msg.length > 100 ? msg.slice(0, 100) + '…' : msg;
+                    const msgShort = msg.length > 180 ? msg.slice(0, 177) + '…' : msg;
                     const sel = Number(p.id) === __incomingSelectedId ? ' incoming-row--sel' : '';
                     return `<div class="incoming-row${sel}" role="button" tabindex="0" data-incoming-id="${p.id}" onclick="selectIncomingRow(${p.id})">
-                        <div style="display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap;">
-                            <strong style="color:#fff;">${formatCurrency(p.amount)}</strong>
-                            <span style="color:rgba(255,255,255,0.75); font-size:0.85rem;">${esc(timeStr)}</span>
+                        <div style="display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+                            <strong style="color:#34d399; font-size:1.1rem;">${formatCurrency(p.amount)}</strong>
+                            <span style="color:rgba(255,255,255,0.65); font-size:0.82rem;">${esc(timeStr)}</span>
                         </div>
-                        <div style="color:rgba(255,255,255,0.9); font-size:0.9rem; margin-top:0.35rem;">${esc(p.customer_name || '—')} · receipt: <strong>${esc(p.transaction_id || '—')}</strong></div>
-                        <div style="color:rgba(255,255,255,0.75); font-size:0.82rem; margin-top:0.35rem; word-break:break-word;">${esc(msgShort)}</div>
-                        <div style="margin-top:0.35rem;"><span class="badge" style="background:var(--accent-success);">${esc(p.payment_method || 'M-Pesa')}</span> <span class="badge" style="background:var(--accent-warning);">${esc(p.status)}</span></div>
+                        <div style="color:#fff; font-size:0.92rem; margin-top:0.4rem; font-weight:600;">${esc(p.customer_name || '—')}&nbsp;&nbsp;<span style="font-weight:400; color:rgba(255,255,255,0.7);">Receipt: <code style="background:rgba(255,255,255,0.1); padding:0.1rem 0.35rem; border-radius:4px;">${esc(p.transaction_id || '—')}</code></span></div>
+                        ${msgShort ? `<div style="color:rgba(255,255,255,0.78); font-size:0.82rem; margin-top:0.35rem; line-height:1.45; word-break:break-word;">${esc(msgShort)}</div>` : ''}
+                        <div style="margin-top:0.4rem; display:flex; gap:0.4rem; flex-wrap:wrap;">
+                            <span class="badge" style="background:var(--accent-success);">${esc(p.payment_method || 'M-Pesa')}</span>
+                            <span class="badge" style="background:${p.status === 'confirmed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${esc(p.status)}</span>
+                            ${Number(p.id) === __incomingSelectedId ? '<span class="badge" style="background:var(--primary);"><i class="fas fa-check"></i> Selected</span>' : ''}
+                        </div>
                     </div>`;
                 })
                 .join('');
@@ -337,9 +360,11 @@
         async function refreshIncomingList() {
             const listEl = document.getElementById('incomingMpesaList');
             document.getElementById('incomingMpesaError').textContent = '';
-            listEl.innerHTML = '<p class="card-small" style="color:rgba(255,255,255,0.85);">Loading…</p>';
+            listEl.innerHTML = '<p class="card-small" style="color:rgba(255,255,255,0.85);">Loading M-Pesa messages…</p>';
             try {
-                const r = await apiFetch('/payments/unlinked-incoming');
+                // Pass the order amount so backend only returns matching messages
+                const amountParam = __incomingOrderTotal ? `?amount=${encodeURIComponent(__incomingOrderTotal)}` : '';
+                const r = await apiFetch(`/payments/unlinked-incoming${amountParam}`);
                 __incomingList = r.data || [];
                 renderIncomingList();
             } catch (err) {
@@ -445,12 +470,14 @@
                                         
                                         // Record Offline
                                         html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #475569; color: #fff;" onclick="event.stopPropagation();openIncomingMpesaModal(${p.order_id}, ${orderTotal})" title="Link Manual Receipt">Manual</button>`;
-                                        
-                                        // Cancel Order (only for Admin)
-                                        if (user && user.role === 'admin') {
-                                            html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-danger); color: #fff;" onclick="event.stopPropagation();cancelOrder(${p.order_id})" title="Cancel Order"><i class="fas fa-times-circle"></i></button>`;
-                                        }
-                                    } else if (p.status === 'confirmed' || p.payment_method === 'Cash') {
+                                    }
+
+                                    // Delete / Cancel option for Admin
+                                    if (user && user.role === 'admin' && p.status !== 'confirmed') {
+                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-danger); color: #fff; display: inline-flex; align-items: center; justify-content: center; margin-left: 0.2rem;" onclick="event.stopPropagation(); handleDeleteAction(${p.id ? p.id : 'null'}, ${p.order_id ? p.order_id : 'null'})" title="Cancel Order / Delete Payment"><i class="fas fa-trash"></i></button>`;
+                                    }
+                                    
+                                    if (p.status === 'confirmed' || p.payment_method === 'Cash') {
                                         html += '<span style="color:var(--accent-success); font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap;"><i class="fas fa-check-circle"></i> Paid</span>';
                                     } else {
                                         html += '<span style="color: rgba(255,255,255,0.75); font-size: 0.85rem; white-space: nowrap;">Waiting...</span>';
@@ -638,67 +665,176 @@
 
         async function combineSelectedOrders() {
             const checked = document.querySelectorAll('.order-checkbox:checked');
-            const orderIds = Array.from(checked).map(cb => cb.value).filter(v => v !== 'null');
+            // Ensure unique order IDs to prevent duplicate merge operations
+            const orderIds = [...new Set(Array.from(checked).map(cb => cb.value).filter(v => v !== 'null' && v !== 'undefined' && v))];
             
             if (orderIds.length < 2) return alert('Select at least 2 valid orders to combine.');
 
             if (!confirm(`Are you sure you want to combine ${orderIds.length} orders into a single bill?`)) return;
 
             try {
-                let combinedItems = [];
+                // Collect all items + totals from each order
+                const itemMap = new Map(); // key: `itemId_price` → consolidated item
                 let totalAmount = 0;
                 let customerNames = [];
 
                 for (const id of orderIds) {
                     const res = await apiFetch(`/orders/${id}`);
                     const order = res.data;
-                    
-                    // Map order items to inventory structure expected by backend createOrder
-                    const mappedItems = order.items.map(item => ({
-                        id: item.item_id,
-                        quantity: item.quantity,
-                        selling_price: item.price,
-                        name: item.name
-                    }));
-                    combinedItems = combinedItems.concat(mappedItems);
+
+                    for (const item of (order.items || [])) {
+                        const price = Number(item.price) || 0;
+                        const qty   = Number(item.quantity) || 0;
+                        const key   = `${item.item_id}_${price}`;
+
+                        if (itemMap.has(key)) {
+                            itemMap.get(key).quantity += qty;
+                        } else {
+                            itemMap.set(key, {
+                                id: item.item_id,
+                                quantity: qty,
+                                selling_price: price,
+                                price: price,
+                                name: item.name || item.item_name || ''
+                            });
+                        }
+                    }
+
                     totalAmount += Number(order.total_amount);
-                    if (order.customer_name) customerNames.push(order.customer_name);
-                    
-                    // Mark old order as merged (using status status: 'merged' to hide it)
-                    await apiFetch(`/orders/${id}/status`, {
-                        method: 'PUT',
-                        body: JSON.stringify({ status: 'merged', payment_status: 'merged' })
-                    });
+                    if (order.customer_name && order.customer_name !== 'Guest') {
+                        customerNames.push(order.customer_name);
+                    }
                 }
 
-                // Create new combined order with isMerge flag set to true
+                const combinedItems = Array.from(itemMap.values());
+                const uniqueNames   = [...new Set(customerNames)];
+                const combinedName  = uniqueNames.length > 0
+                    ? 'Combined: ' + uniqueNames.join(', ')
+                    : 'Combined Order';
+
+                // Create the new combined order on the backend
                 const newOrder = await apiFetch('/orders', {
                     method: 'POST',
                     body: JSON.stringify({
                         items: combinedItems,
                         total_amount: totalAmount,
-                        customer_name: 'Combined: ' + [...new Set(customerNames)].join(', '),
-                        isMerge: true
+                        customer_name: combinedName,
+                        isMerge: true,
+                        mergedOrderIds: orderIds
                     })
                 });
 
-                alert(`Orders combined into new Order #${newOrder.orderId}`);
-                loadData();
+                // Clear checkboxes and hide combine button
+                document.getElementById('selectAllOrders').checked = false;
+                document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = false);
+                updateCombineButton();
+
+                // Refresh list then immediately open the combined bill for printing
+                await loadData();
+                await printOrderDirect(newOrder.orderId);
+
             } catch (err) { alert(err.message); }
         }
 
-        async function cancelOrder(id) {
-            if (!id) return;
-            if (!confirm(`Are you sure you want to CANCEL Order #${id}? This will remove it from the active list.`)) return;
+        let __deleteModalResolve = null;
 
-            try {
-                await apiFetch(`/orders/${id}/status`, {
-                    method: 'PUT',
-                    body: JSON.stringify({ status: 'cancelled', payment_status: 'cancelled' })
-                });
-                alert('Order cancelled successfully.');
-                loadData();
-            } catch (err) { alert('Failed to cancel: ' + err.message); }
+        function closeDeleteModal() {
+            document.getElementById('deleteConfirmModal').style.display = 'none';
+            if (__deleteModalResolve) { __deleteModalResolve(null); __deleteModalResolve = null; }
+        }
+
+        function showDeleteModal(description, buttons) {
+            // buttons = [{label, danger, action}]
+            document.getElementById('deleteModalDesc').textContent = description;
+            const container = document.getElementById('deleteModalButtons');
+            container.innerHTML = '';
+            buttons.forEach(btn => {
+                const el = document.createElement('button');
+                el.className = 'btn';
+                el.style.cssText = `width:100%; background:${btn.danger ? 'var(--accent-danger)' : 'var(--accent-success)'}; color:#fff; font-weight:600; display:flex; align-items:center; justify-content:center; gap:0.4rem;`;
+                el.innerHTML = btn.label;
+                el.onclick = async () => {
+                    closeDeleteModal();
+                    await btn.action();
+                };
+                container.appendChild(el);
+            });
+            document.getElementById('deleteConfirmModal').style.display = 'flex';
+        }
+
+        async function handleDeleteAction(paymentId, orderId) {
+            if (!user || user.role !== 'admin') {
+                return alert('Only administrators can perform this action.');
+            }
+
+            // Normalize — HTML passes literal null or a number
+            const pid = paymentId && paymentId !== 'null' ? Number(paymentId) : null;
+            const oid = orderId && orderId !== 'null' ? Number(orderId) : null;
+
+            // Case 1: Unlinked payment (no order)
+            if (pid && !oid) {
+                showDeleteModal(
+                    `Delete unlinked Payment #${pid}? This cannot be undone.`,
+                    [{ label: '<i class="fas fa-trash"></i> Delete Payment', danger: true, action: async () => {
+                        try {
+                            await apiFetch(`/payments/${pid}`, { method: 'DELETE' });
+                            loadData();
+                        } catch (err) { alert('Failed: ' + err.message); }
+                    }}]
+                );
+                return;
+            }
+
+            // Case 2: Order only — no payment row (synthesized row)
+            if (!pid && oid) {
+                showDeleteModal(
+                    `Cancel Order #${oid}? It will be removed from the active list. Any linked payments will remain but be detached.`,
+                    [{ label: '<i class="fas fa-times-circle"></i> Cancel Order', danger: true, action: async () => {
+                        try {
+                            await apiFetch(`/orders/${oid}/status`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ status: 'cancelled', payment_status: 'cancelled' })
+                            });
+                            loadData();
+                        } catch (err) { alert('Failed: ' + err.message); }
+                    }}]
+                );
+                return;
+            }
+
+            // Case 3: Both payment and order linked
+            if (pid && oid) {
+                showDeleteModal(
+                    `Order #${oid} has Payment #${pid} attached. Choose what to do:`,
+                    [
+                        { label: '<i class="fas fa-times-circle"></i> Cancel Order only (keep payment record)', danger: true, action: async () => {
+                            try {
+                                await apiFetch(`/orders/${oid}/status`, {
+                                    method: 'PUT',
+                                    body: JSON.stringify({ status: 'cancelled', payment_status: 'cancelled' })
+                                });
+                                loadData();
+                            } catch (err) { alert('Failed: ' + err.message); }
+                        }},
+                        { label: '<i class="fas fa-trash"></i> Delete Payment only (keep order open)', danger: true, action: async () => {
+                            try {
+                                await apiFetch(`/payments/${pid}`, { method: 'DELETE' });
+                                loadData();
+                            } catch (err) { alert('Failed: ' + err.message); }
+                        }},
+                        { label: '<i class="fas fa-skull"></i> Cancel Order AND delete Payment', danger: true, action: async () => {
+                            try {
+                                await apiFetch(`/orders/${oid}/status`, {
+                                    method: 'PUT',
+                                    body: JSON.stringify({ status: 'cancelled', payment_status: 'cancelled' })
+                                });
+                                await apiFetch(`/payments/${pid}`, { method: 'DELETE' });
+                                loadData();
+                            } catch (err) { alert('Failed: ' + err.message); }
+                        }}
+                    ]
+                );
+            }
         }
 
         if (!user || (user.role !== 'admin' && user.role !== 'cashier')) {

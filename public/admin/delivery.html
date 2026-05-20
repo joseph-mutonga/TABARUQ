@@ -91,6 +91,8 @@
                         <thead>
                             <tr>
                                 <th>Platform</th>
+                                <th>Weekly Orders</th>
+                                <th>Weekly Amount</th>
                                 <th>Total Orders</th>
                                 <th>Gross Revenue</th>
                                 <th>Commission (Fees)</th>
@@ -327,7 +329,9 @@
 
                     return `
                         <tr>
-                            <td><strong>${r.platform}</strong></td>
+                            <td><strong>${r.platform} (${r.commission_percentage}%)</strong></td>
+                            <td>${r.weekly_orders}</td>
+                            <td style="font-weight:600; color:#fff;">${formatCurrency(r.weekly_revenue || 0)}</td>
                             <td>${r.total_orders}</td>
                             <td>${formatCurrency(r.gross_revenue)}</td>
                             <td style="color:var(--accent-danger); font-weight:500;">${formatCurrency(r.commission_fees || 0)}</td>

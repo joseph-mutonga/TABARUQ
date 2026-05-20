@@ -79,9 +79,9 @@ exports.getTransactionHistory = async (req, res) => {
             SELECT o.*, o.customer_name, COALESCE(u.username, o.platform, 'Delivery') as cashier_name, 
                    COALESCE(p.methods, o.platform, 'M-Pesa') as payment_method, 
                    COALESCE(p.receipts, o.platform_order_id, '—') as transaction_id,
-                   (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', i.name) SEPARATOR ', ') 
+                   (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', COALESCE(oi.item_name, i.name, 'Unknown Item')) SEPARATOR ', ') 
                     FROM order_items oi 
-                    JOIN inventory i ON oi.item_id = i.id 
+                    LEFT JOIN inventory i ON oi.item_id = i.id 
                     WHERE oi.order_id = o.id) as items_list
             FROM orders o
             LEFT JOIN users u ON o.cashier_id = u.id

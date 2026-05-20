@@ -1,13 +1,16 @@
 const db = require('../config/db');
 
 exports.createOrder = async (req, res) => {
-    const { items, total_amount, customer_name, platform, platform_order_id, isMerge } = req.body;
+    const { items, total_amount, customer_name, platform, platform_order_id, isMerge, mergedOrderIds } = req.body;
     const connection = await db.getConnection();
     
     try {
         await connection.beginTransaction();
 
-        const nameToSave = customer_name || (platform ? `${platform} Order` : 'Guest');
+        let nameToSave = customer_name || (platform ? `${platform} Order` : 'Guest');
+        if (nameToSave && nameToSave.length > 255) {
+            nameToSave = nameToSave.substring(0, 252) + '...';
+        }
 
         const [orderResult] = await connection.execute(
             'INSERT INTO orders (cashier_id, total_amount, status, payment_status, customer_name, platform, platform_order_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -15,20 +18,51 @@ exports.createOrder = async (req, res) => {
         );
         const orderId = orderResult.insertId;
 
+        // If it's a delivery platform order, insert platform fees based on settings
+        if (platform) {
+            const [commissions] = await connection.execute(
+                'SELECT commission_percentage FROM platform_commissions WHERE platform = ?',
+                [platform]
+            );
+            const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
+            if (commissionPct > 0) {
+                const feeAmount = (Number(total_amount) || 0) * (commissionPct / 100);
+                await connection.execute(
+                    'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
+                    [orderId, commissionPct, feeAmount]
+                );
+            }
+        }
+
+        // Consolidate items with the same item_id into a single line (important for merged orders)
+        const consolidatedMap = new Map();
         for (const item of items) {
-            // Determine price to record
             let itemPrice = Number(item.selling_price) || Number(item.price) || 0;
             if (platform === 'Uber Eats' && item.uber_price) itemPrice = Number(item.uber_price);
             else if (platform === 'Glovo' && item.glovo_price) itemPrice = Number(item.glovo_price);
             else if (platform === 'Bolt Food' && item.bolt_price) itemPrice = Number(item.bolt_price);
 
-            const quantity = Number(item.quantity) || 0;
-            const subtotal = quantity * itemPrice;
+            const key = `${item.id}_${itemPrice}`; // group by item + price
+            const qty = Number(item.quantity) || 0;
+            if (consolidatedMap.has(key)) {
+                consolidatedMap.get(key).quantity += qty;
+            } else {
+                consolidatedMap.set(key, {
+                    id: item.id,
+                    quantity: qty,
+                    price: itemPrice,
+                    name: item.name || item.item_name || null
+                });
+            }
+        }
 
-            // 1. Record Order Item
+        for (const item of consolidatedMap.values()) {
+            const subtotal = item.quantity * item.price;
+
+            // 1. Record Order Item (one consolidated row per item)
             await connection.execute(
-                'INSERT INTO order_items (order_id, item_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)',
-                [orderId, item.id, quantity, itemPrice, subtotal]
+                'INSERT INTO order_items (order_id, item_id, quantity, price, subtotal, item_name) VALUES (?, ?, ?, ?, ?, ?)',
+                [orderId, item.id, item.quantity, item.price, subtotal, item.name || null]
             );
 
             if (!isMerge) {
@@ -42,6 +76,22 @@ exports.createOrder = async (req, res) => {
                 await connection.execute(
                     'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
                     [item.id, req.user.id, -item.quantity, `Sale - Order #${orderId}`]
+                );
+            }
+        }
+
+        // Handle merging of old orders and their payments
+        if (isMerge && Array.isArray(mergedOrderIds) && mergedOrderIds.length > 0) {
+            for (const oldId of mergedOrderIds) {
+                // Mark old order as merged
+                await connection.execute(
+                    'UPDATE orders SET status = "merged", payment_status = "merged" WHERE id = ?',
+                    [oldId]
+                );
+                // Re-link all payments from old order to the new combined order
+                await connection.execute(
+                    'UPDATE payments SET order_id = ? WHERE order_id = ?',
+                    [orderId, oldId]
                 );
             }
         }
@@ -127,14 +177,20 @@ exports.updateOrderStatus = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Only administrators can cancel orders' });
         }
 
-        await db.execute('UPDATE orders SET status = ?, payment_status = ? WHERE id = ?', [status, payment_status, id]);
+        // Sanitize payment_status — the DB ENUM only allows: pending, paid, failed, partial, merged
+        // 'cancelled' is NOT a valid ENUM value; use 'pending' when cancelling (order.status handles exclusion)
+        const validPaymentStatuses = ['pending', 'paid', 'failed', 'partial', 'merged'];
+        const safePaymentStatus = validPaymentStatuses.includes(payment_status) ? payment_status : 'pending';
+
+        await db.execute('UPDATE orders SET status = ?, payment_status = ? WHERE id = ?', [status, safePaymentStatus, id]);
         
         // Emit Real-time Update
         const io = req.app.get('io');
-        if (io) io.emit('order_update', { type: 'status', orderId: id, status, payment_status });
+        if (io) io.emit('order_update', { type: 'status', orderId: id, status, payment_status: safePaymentStatus });
 
         res.json({ success: true, message: 'Order status updated' });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('updateOrderStatus error:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
     }
 };

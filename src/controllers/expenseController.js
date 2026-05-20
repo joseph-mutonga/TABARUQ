@@ -5,7 +5,7 @@ exports.getExpenses = async (req, res) => {
         const [rows] = await db.execute(`
             SELECT e.*, u.username as creator_name 
             FROM expenses e 
-            JOIN users u ON e.created_by = u.id 
+            LEFT JOIN users u ON e.created_by = u.id 
             ORDER BY e.expense_date DESC
         `);
         res.json({ success: true, data: rows });

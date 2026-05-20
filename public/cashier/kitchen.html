@@ -86,8 +86,6 @@
 
         socket.on('new_delivery_order', (order) => {
             console.log('New Order Received:', order);
-            activeOrders.unshift(order);
-            renderOrders();
             playNotification();
         });
 

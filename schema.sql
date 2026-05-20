@@ -84,10 +84,11 @@ CREATE TABLE IF NOT EXISTS orders (
     status ENUM('pending', 'completed', 'cancelled', 'merged') DEFAULT 'pending',
     payment_status ENUM('pending', 'paid', 'failed', 'partial', 'merged') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    customer_name VARCHAR(100) DEFAULT 'Guest',
+    customer_name VARCHAR(255) DEFAULT 'Guest',
     platform VARCHAR(50) DEFAULT NULL,
     platform_order_id VARCHAR(100) DEFAULT NULL,
     UNIQUE KEY platform_order (platform, platform_order_id),
+    INDEX idx_orders_created_at (created_at),
     FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
@@ -117,7 +118,7 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     confirmed_at TIMESTAMP NULL DEFAULT NULL,
     confirmed_by INT DEFAULT NULL,
-    customer_name VARCHAR(100) DEFAULT NULL,
+    customer_name VARCHAR(255) DEFAULT NULL,
     mpesa_result_message VARCHAR(512) DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
     FOREIGN KEY (confirmed_by) REFERENCES users(id) ON DELETE SET NULL
