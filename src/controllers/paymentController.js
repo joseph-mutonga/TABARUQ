@@ -516,6 +516,7 @@ exports.getPayments = async (req, res) => {
                 LEFT JOIN users u ON p.confirmed_by = u.id
                 WHERE o.payment_status != 'paid'
                   AND o.status NOT IN ('cancelled', 'merged')
+                  AND o.platform IS NULL
 
                 UNION ALL
 

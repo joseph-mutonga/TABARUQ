@@ -166,13 +166,6 @@ exports.recordSettlement = async (req, res) => {
         );
         const settlementId = result.insertId;
 
-        // Fetch platform commission percentage
-        const [commissions] = await connection.execute(
-            'SELECT commission_percentage FROM platform_commissions WHERE platform = ?',
-            [platform]
-        );
-        const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
-
         // Fetch all pending orders for this platform in FIFO order (oldest first)
         const [pendingOrders] = await connection.execute(
             "SELECT id, total_amount, customer_name FROM orders WHERE platform = ? AND payment_status != 'paid' ORDER BY created_at ASC",
@@ -183,7 +176,13 @@ exports.recordSettlement = async (req, res) => {
 
         for (const order of pendingOrders) {
             const orderTotal = Number(order.total_amount) || 0;
-            const feeAmount = orderTotal * (commissionPct / 100);
+            
+            // Get the fee that was recorded at the time of the order
+            const [feeRow] = await connection.execute(
+                'SELECT fee_amount FROM platform_fees WHERE order_id = ?',
+                [order.id]
+            );
+            const feeAmount = feeRow.length > 0 ? Number(feeRow[0].fee_amount) : 0;
             const netAmount = orderTotal - feeAmount;
 
             // Stop if the remaining settlement amount cannot cover the net order total (allowing 0.1 rounding tolerance)
@@ -202,18 +201,6 @@ exports.recordSettlement = async (req, res) => {
                 "UPDATE orders SET payment_status = 'paid' WHERE id = ?",
                 [order.id]
             );
-
-            // Record platform fee if commission is set and not already recorded
-            const [existingFee] = await connection.execute(
-                'SELECT id FROM platform_fees WHERE order_id = ?',
-                [order.id]
-            );
-            if (existingFee.length === 0 && commissionPct > 0) {
-                await connection.execute(
-                    'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
-                    [order.id, commissionPct, feeAmount]
-                );
-            }
 
             // Insert payment record so it registers in transaction reports/history (using netAmount!)
             await connection.execute(
@@ -261,10 +248,7 @@ exports.getReconciliationReport = async (req, res) => {
                     )
                 ELSE 0 END), 0) as settled_revenue,
                 COALESCE(SUM(
-                    COALESCE(
-                        (SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = o.id),
-                        o.total_amount * (pc.commission_percentage / 100)
-                    )
+                    (SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = o.id)
                 ), 0) as commission_fees,
                 COALESCE(SUM(CASE WHEN o.payment_status != 'paid' THEN o.total_amount ELSE 0 END), 0) as pending_revenue
             FROM platform_commissions pc
@@ -313,15 +297,36 @@ exports.saveCommissions = async (req, res) => {
 };
 
 exports.getDeliveryOrders = async (req, res) => {
-    const { status } = req.query;
+    const { status, period, platform } = req.query;
     try {
-        let query = 'SELECT * FROM orders WHERE platform IS NOT NULL';
+        let query = 'SELECT o.*, u.username as cashier_name FROM orders o LEFT JOIN users u ON o.cashier_id = u.id WHERE o.platform IS NOT NULL';
         const params = [];
+        
+        if (req.user.role !== 'admin') {
+            query += ' AND o.cashier_id = ?';
+            params.push(req.user.id);
+        }
+
         if (status) {
-            query += ' AND status = ?';
+            query += ' AND o.status = ?';
             params.push(status);
         }
-        query += ' ORDER BY created_at DESC';
+
+        if (platform) {
+            query += ' AND o.platform = ?';
+            params.push(platform);
+        }
+
+        if (period === 'day') {
+            query += ' AND DATE(o.created_at) = CURDATE()';
+        } else if (period === 'week') {
+            query += ' AND YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1)';
+        } else if (period === 'month') {
+            query += ' AND MONTH(o.created_at) = MONTH(CURDATE()) AND YEAR(o.created_at) = YEAR(CURDATE())';
+        } else if (period === 'year') {
+            query += ' AND YEAR(o.created_at) = YEAR(CURDATE())';
+        }
+        query += ' ORDER BY o.created_at DESC';
         const [rows] = await db.execute(query, params);
         res.json({ success: true, data: rows });
     } catch (err) {

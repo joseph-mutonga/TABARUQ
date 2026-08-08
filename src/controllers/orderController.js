@@ -121,7 +121,7 @@ exports.getOrders = async (req, res) => {
             SELECT o.*, COALESCE(u.username, o.platform, 'Delivery') as cashier_name 
             FROM orders o 
             LEFT JOIN users u ON o.cashier_id = u.id 
-            WHERE o.status != 'merged'
+            WHERE o.status != 'merged' AND o.platform IS NULL
             ORDER BY o.created_at DESC
         `);
         res.json({ success: true, data: rows });

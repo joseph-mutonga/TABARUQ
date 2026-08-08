@@ -109,7 +109,24 @@
 
 
             <div class="glass-card" style="margin-top:2rem;">
-                <h3>Delivery Order History</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <h3 style="margin:0;">Delivery Order History</h3>
+                    <div style="display:flex; gap:1rem; align-items:center;">
+                        <select id="historyPlatformFilter" class="form-control" style="width:auto; min-width:150px;" onchange="loadHistory()">
+                            <option value="all">All Platforms</option>
+                            <option value="Uber Eats">Uber Eats</option>
+                            <option value="Glovo">Glovo</option>
+                            <option value="Bolt Food">Bolt Food</option>
+                        </select>
+                        <select id="historyPeriodFilter" class="form-control" style="width:auto; min-width:150px;" onchange="loadHistory()">
+                            <option value="all">All Time</option>
+                            <option value="day">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead>
@@ -361,7 +378,19 @@
 
         async function loadHistory() {
             try {
-                const res = await apiFetch('/delivery/orders');
+                const periodEl = document.getElementById('historyPeriodFilter');
+                const platformEl = document.getElementById('historyPlatformFilter');
+                const period = periodEl ? periodEl.value : 'all';
+                const platform = platformEl ? platformEl.value : 'all';
+                
+                const params = new URLSearchParams();
+                if (period !== 'all') params.append('period', period);
+                if (platform !== 'all') params.append('platform', platform);
+                
+                const queryString = params.toString();
+                const url = '/delivery/orders' + (queryString ? `?${queryString}` : '');
+                
+                const res = await apiFetch(url);
                 const data = res.data;
                 document.getElementById('historyBody').innerHTML = data.map(o => `
                     <tr>
@@ -727,6 +756,9 @@
 
             const reconCard = document.getElementById('reconciliationCard');
             if (reconCard) reconCard.style.display = 'none';
+
+            const addDeliveryBtn = document.querySelector('button[onclick="openDeliveryItemModal()"]');
+            if (addDeliveryBtn) addDeliveryBtn.style.display = 'none';
         }
 
         let __inventory = [];
@@ -848,20 +880,26 @@
                 });
                 alert('Order recorded successfully!');
                 closeManualOrderModal();
-                loadReconciliation();
+                if (user && user.role === 'admin') {
+                    loadReconciliation();
+                }
             } catch (err) { alert("Server Error: " + err.message); }
         }
 
-        loadReconciliation();
-        loadStats();
+        if (user && user.role === 'admin') {
+            loadReconciliation();
+            loadStats();
+        }
         loadHistory();
         loadDeliveryMenu();
 
         // Realtime WebSockets updates to keep delivery reports up-to-date
         if (typeof socket !== 'undefined' && socket) {
             const reloadDelivery = () => {
-                loadReconciliation();
-                loadStats();
+                if (user && user.role === 'admin') {
+                    loadReconciliation();
+                    loadStats();
+                }
                 loadHistory();
                 checkPendingPayments();
             };

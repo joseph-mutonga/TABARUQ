@@ -33,7 +33,7 @@ exports.getStats = async (req, res) => {
             SELECT COALESCE(oi.item_name, i.name, 'Unknown Item') as name, SUM(oi.quantity) as sold, SUM(oi.subtotal) as revenue
             FROM order_items oi
             LEFT JOIN inventory i ON oi.item_id = i.id
-            GROUP BY name
+            GROUP BY COALESCE(oi.item_name, i.name, 'Unknown Item')
             ORDER BY sold DESC
             LIMIT 4
         `);
@@ -51,6 +51,7 @@ exports.getStats = async (req, res) => {
                 WHERE status = 'confirmed'
                 GROUP BY order_id
             ) p ON o.id = p.order_id
+            WHERE o.platform IS NULL
             ORDER BY o.created_at DESC LIMIT 5
         `);
 
