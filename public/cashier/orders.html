@@ -576,6 +576,10 @@
                 const order = orderRes.data;
 
                 const printWindow = window.open('', '_blank', 'width=400,height=600');
+
+                // Trigger cash drawer open (silently ignore if printer not configured)
+                try { await apiFetch('/settings/open-drawer', { method: 'POST' }); } catch (_) {}
+
                 const itemsHtml = order.items.map(i => `
                     <tr>
                         <td style="padding: 5px 0;">${i.name} x${i.quantity}</td>

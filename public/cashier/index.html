@@ -80,6 +80,7 @@
                         <option value="Uber Eats">Uber Eats</option>
                         <option value="Glovo">Glovo</option>
                         <option value="Bolt Food">Bolt Food</option>
+                        <option value="Tabaruq Delivery">Tabaruq Delivery</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -360,6 +361,7 @@
                 if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
                 if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                if (platform === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
 
                 total += price * item.quantity;
                 return `
@@ -677,6 +679,7 @@
                 if (platformSelection === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platformSelection === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
                 if (platformSelection === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                if (platformSelection === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
                 return acc + (price * item.quantity);
             }, 0);
             const customerName = document.getElementById('custName').value.trim();

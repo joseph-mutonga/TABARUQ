@@ -55,6 +55,10 @@
                         <label style="color: var(--text-gray); font-size: 0.9rem; font-weight: 500;">Bolt Food (%)</label>
                         <input type="number" id="commBolt" class="form-control" min="0" max="100" step="0.1" required style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;">
                     </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label style="color: var(--text-gray); font-size: 0.9rem; font-weight: 500;">Tabaruq Delivery (%)</label>
+                        <input type="number" id="commOwnDelivery" class="form-control" min="0" max="100" step="0.1" required style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;">
+                    </div>
                     <div style="grid-column: span 3; display: flex; justify-content: flex-end; margin-top: 1rem;">
                         <button type="submit" class="btn btn-primary" style="padding:0.6rem 1.5rem;"><i class="fas fa-save"></i> Save Settings</button>
                     </div>
@@ -98,6 +102,18 @@
                         <input type="text" id="receiptFooter" class="form-control" placeholder="e.g. Thank you for dining with us!" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;">
                     </div>
 
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+                        <div class="form-group">
+                            <label style="color: var(--text-gray); font-size: 0.9rem; font-weight: 500;"><i class="fas fa-cash-register"></i> Cash Drawer Printer IP</label>
+                            <input type="text" id="receiptPrinterIp" class="form-control" placeholder="e.g. 192.168.1.100" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;">
+                            <small style="color: var(--text-gray); font-size: 0.78rem;">Network IP of your thermal receipt printer for cash drawer control.</small>
+                        </div>
+                        <div class="form-group">
+                            <label style="color: var(--text-gray); font-size: 0.9rem; font-weight: 500;">Printer Port</label>
+                            <input type="number" id="receiptPrinterPort" class="form-control" placeholder="9100" value="9100" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;">
+                        </div>
+                    </div>
+
                     <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
                         <button type="submit" class="btn btn-primary" style="padding:0.6rem 1.5rem;"><i class="fas fa-save"></i> Save Receipt Settings</button>
                     </div>
@@ -139,6 +155,7 @@
                     if (c.platform === 'Uber Eats') document.getElementById('commUber').value = c.commission_percentage;
                     if (c.platform === 'Glovo') document.getElementById('commGlovo').value = c.commission_percentage;
                     if (c.platform === 'Bolt Food') document.getElementById('commBolt').value = c.commission_percentage;
+                    if (c.platform === 'Tabaruq Delivery') document.getElementById('commOwnDelivery').value = c.commission_percentage;
                 });
             } catch (err) { console.error(err); }
         }
@@ -148,10 +165,11 @@
             const uber_percentage = document.getElementById('commUber').value;
             const glovo_percentage = document.getElementById('commGlovo').value;
             const bolt_percentage = document.getElementById('commBolt').value;
+            const own_delivery_percentage = document.getElementById('commOwnDelivery').value;
             try {
                 await apiFetch('/delivery/commissions', {
                     method: 'POST',
-                    body: JSON.stringify({ uber_percentage, glovo_percentage, bolt_percentage })
+                    body: JSON.stringify({ uber_percentage, glovo_percentage, bolt_percentage, own_delivery_percentage })
                 });
                 alert('Commission settings saved successfully!');
             } catch (err) { alert(err.message); }
@@ -168,6 +186,8 @@
                     document.getElementById('receiptPaybill').value = data.mpesa_paybill || '';
                     document.getElementById('receiptTill').value = data.mpesa_till || '';
                     document.getElementById('receiptFooter').value = data.footer_message || '';
+                    document.getElementById('receiptPrinterIp').value = data.printer_ip || '';
+                    document.getElementById('receiptPrinterPort').value = data.printer_port || 9100;
                 }
             } catch (err) { console.error(err); }
         }
@@ -180,10 +200,12 @@
             const mpesa_paybill = document.getElementById('receiptPaybill').value;
             const mpesa_till = document.getElementById('receiptTill').value;
             const footer_message = document.getElementById('receiptFooter').value;
+            const printer_ip = document.getElementById('receiptPrinterIp').value;
+            const printer_port = document.getElementById('receiptPrinterPort').value;
             try {
                 await apiFetch('/settings/receipt', {
                     method: 'POST',
-                    body: JSON.stringify({ hotel_name, phone_number, address, mpesa_paybill, mpesa_till, footer_message })
+                    body: JSON.stringify({ hotel_name, phone_number, address, mpesa_paybill, mpesa_till, footer_message, printer_ip, printer_port })
                 });
                 alert('Receipt settings saved successfully!');
             } catch (err) { alert(err.message); }

@@ -10,15 +10,15 @@ exports.getItems = async (req, res) => {
 };
 
 exports.addItem = async (req, res) => {
-    const { name, category, cost_price, selling_price, unit, quantity, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform, low_stock_threshold } = req.body;
+    const { name, category, cost_price, selling_price, unit, quantity, item_type, uber_price, glovo_price, bolt_price, own_delivery_price, is_delivery, delivery_platform, low_stock_threshold } = req.body;
     let conn;
     try {
         conn = await db.getConnection();
         await conn.beginTransaction();
 
         const [result] = await conn.execute(
-            'INSERT INTO inventory (name, category, cost_price, selling_price, unit, quantity, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform, low_stock_threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [name, category, cost_price, selling_price || 0, unit || 'pcs', quantity || 0, item_type || 'saleable', uber_price || null, glovo_price || null, bolt_price || null, is_delivery || false, delivery_platform || null, low_stock_threshold || 10.00]
+            'INSERT INTO inventory (name, category, cost_price, selling_price, unit, quantity, item_type, uber_price, glovo_price, bolt_price, own_delivery_price, is_delivery, delivery_platform, low_stock_threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, category, cost_price, selling_price || 0, unit || 'pcs', quantity || 0, item_type || 'saleable', uber_price || null, glovo_price || null, bolt_price || null, own_delivery_price || null, is_delivery || false, delivery_platform || null, low_stock_threshold || 10.00]
         );
         
         const itemId = result.insertId;
@@ -59,11 +59,11 @@ exports.addItem = async (req, res) => {
 
 exports.updateItem = async (req, res) => {
     const { id } = req.params;
-    const { name, category, cost_price, selling_price, unit, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform, low_stock_threshold } = req.body;
+    const { name, category, cost_price, selling_price, unit, item_type, uber_price, glovo_price, bolt_price, own_delivery_price, is_delivery, delivery_platform, low_stock_threshold } = req.body;
     try {
         await db.execute(
-            'UPDATE inventory SET name=?, category=?, cost_price=?, selling_price=?, unit=?, item_type=?, uber_price=?, glovo_price=?, bolt_price=?, is_delivery=?, delivery_platform=?, low_stock_threshold=? WHERE id=?',
-            [name, category, cost_price, selling_price, unit, item_type, uber_price, glovo_price, bolt_price, is_delivery, delivery_platform || null, low_stock_threshold || 10.00, id]
+            'UPDATE inventory SET name=?, category=?, cost_price=?, selling_price=?, unit=?, item_type=?, uber_price=?, glovo_price=?, bolt_price=?, own_delivery_price=?, is_delivery=?, delivery_platform=?, low_stock_threshold=? WHERE id=?',
+            [name, category, cost_price, selling_price, unit, item_type, uber_price, glovo_price, bolt_price, own_delivery_price, is_delivery, delivery_platform || null, low_stock_threshold || 10.00, id]
         );
 
         const io = req.app.get('io');

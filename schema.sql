@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS inventory (
     uber_price DECIMAL(10, 2) DEFAULT NULL,
     glovo_price DECIMAL(10, 2) DEFAULT NULL,
     bolt_price DECIMAL(10, 2) DEFAULT NULL,
+    own_delivery_price DECIMAL(10, 2) DEFAULT NULL,
     is_delivery TINYINT(1) DEFAULT 0,
     delivery_platform VARCHAR(50) DEFAULT NULL
 );
@@ -218,14 +219,17 @@ CREATE TABLE IF NOT EXISTS receipt_settings (
     address VARCHAR(255) DEFAULT NULL,
     mpesa_paybill VARCHAR(50) DEFAULT '600000',
     mpesa_till VARCHAR(50) DEFAULT '174379',
-    footer_message VARCHAR(255) DEFAULT 'Thank you for dining with us!'
+    footer_message VARCHAR(255) DEFAULT 'Thank you for dining with us!',
+    printer_ip VARCHAR(50) DEFAULT NULL,
+    printer_port INT DEFAULT 9100
 );
 
 -- Seed initial values for platforms
 INSERT IGNORE INTO platform_commissions (platform, commission_percentage) VALUES 
     ('Uber Eats', 0.00),
     ('Glovo', 0.00),
-    ('Bolt Food', 0.00);
+    ('Bolt Food', 0.00),
+    ('Tabaruq Delivery', 0.00);
 
 -- Seed initial receipt settings
 INSERT IGNORE INTO receipt_settings (id, hotel_name, mpesa_paybill, mpesa_till, footer_message)

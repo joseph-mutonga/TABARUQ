@@ -39,8 +39,9 @@ exports.createOrder = async (req, res) => {
         for (const item of items) {
             let itemPrice = Number(item.selling_price) || Number(item.price) || 0;
             if (platform === 'Uber Eats' && item.uber_price) itemPrice = Number(item.uber_price);
-            else if (platform === 'Glovo' && item.glovo_price) itemPrice = Number(item.glovo_price);
-            else if (platform === 'Bolt Food' && item.bolt_price) itemPrice = Number(item.bolt_price);
+            if (platform === 'Glovo' && item.glovo_price) itemPrice = Number(item.glovo_price);
+            if (platform === 'Bolt Food' && item.bolt_price) itemPrice = Number(item.bolt_price);
+            if (platform === 'Tabaruq Delivery' && item.own_delivery_price) itemPrice = Number(item.own_delivery_price);
 
             const key = `${item.id}_${itemPrice}`; // group by item + price
             const qty = Number(item.quantity) || 0;

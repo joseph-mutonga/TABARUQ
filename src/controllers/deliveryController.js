@@ -275,7 +275,7 @@ exports.getCommissions = async (req, res) => {
 };
 
 exports.saveCommissions = async (req, res) => {
-    const { uber_percentage, glovo_percentage, bolt_percentage } = req.body;
+    const { uber_percentage, glovo_percentage, bolt_percentage, own_delivery_percentage } = req.body;
     try {
         await db.execute(
             'UPDATE platform_commissions SET commission_percentage = ? WHERE platform = ?',
@@ -288,6 +288,10 @@ exports.saveCommissions = async (req, res) => {
         await db.execute(
             'UPDATE platform_commissions SET commission_percentage = ? WHERE platform = ?',
             [parseFloat(bolt_percentage || 0), 'Bolt Food']
+        );
+        await db.execute(
+            'UPDATE platform_commissions SET commission_percentage = ? WHERE platform = ?',
+            [parseFloat(own_delivery_percentage || 0), 'Tabaruq Delivery']
         );
         res.json({ success: true, message: 'Platform commission settings updated successfully' });
     } catch (err) {

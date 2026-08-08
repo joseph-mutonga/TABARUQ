@@ -146,6 +146,10 @@
                             <label style="font-size: 0.7rem;">Bolt Price</label>
                             <input type="number" id="itemBoltPrice" class="form-control" step="0.01">
                         </div>
+                        <div class="form-group">
+                            <label style="font-size: 0.7rem;">Tabaruq Delivery Price</label>
+                            <input type="number" id="itemOwnDeliveryPrice" class="form-control" step="0.01">
+                        </div>
                     </div>
                     <div class="form-group" style="margin-top: 0.5rem;">
                         <label style="font-size: 0.75rem;">Platform Restriction</label>
@@ -154,6 +158,7 @@
                             <option value="Uber Eats">Uber Eats Only</option>
                             <option value="Glovo">Glovo Only</option>
                             <option value="Bolt Food">Bolt Food Only</option>
+                            <option value="Tabaruq Delivery">Tabaruq Delivery Only</option>
                         </select>
                     </div>
                 </div>
@@ -267,6 +272,7 @@
                 document.getElementById('itemUberPrice').value = item.uber_price || '';
                 document.getElementById('itemGlovoPrice').value = item.glovo_price || '';
                 document.getElementById('itemBoltPrice').value = item.bolt_price || '';
+                document.getElementById('itemOwnDeliveryPrice').value = item.own_delivery_price || '';
                 document.getElementById('itemDeliveryPlatform').value = item.delivery_platform || '';
                 document.getElementById('itemIsDelivery').checked = !!item.is_delivery;
                 document.getElementById('initialStockGroup').style.display = 'none';
@@ -361,6 +367,7 @@
                 uber_price: document.getElementById('itemUberPrice').value || null,
                 glovo_price: document.getElementById('itemGlovoPrice').value || null,
                 bolt_price: document.getElementById('itemBoltPrice').value || null,
+                own_delivery_price: document.getElementById('itemOwnDeliveryPrice').value || null,
                 delivery_platform: document.getElementById('itemDeliveryPlatform').value || null,
                 is_delivery: document.getElementById('itemIsDelivery').checked
             };

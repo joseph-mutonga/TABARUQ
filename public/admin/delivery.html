@@ -108,7 +108,11 @@
 
 
 
-            <div class="glass-card" style="margin-top:2rem;">
+            
+            
+
+
+<div class="glass-card" style="margin-top:2rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
                     <h3 style="margin:0;">Delivery Order History</h3>
                     <div style="display:flex; gap:1rem; align-items:center;">
@@ -117,6 +121,17 @@
                             <option value="Uber Eats">Uber Eats</option>
                             <option value="Glovo">Glovo</option>
                             <option value="Bolt Food">Bolt Food</option>
+                            <option value="Tabaruq Delivery">Tabaruq Delivery</option>
+                        </select>
+                        <select id="historyPeriodFilter" class="form-control" style="width:auto; min-width:150px;" onchange="loadHistory()">
+                            <option value="all">All Time</option>
+                            <option value="day">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                        </select>
+                    </div>
+                            <option value="Tabaruq Delivery">Tabaruq Delivery</option>
                         </select>
                         <select id="historyPeriodFilter" class="form-control" style="width:auto; min-width:150px;" onchange="loadHistory()">
                             <option value="all">All Time</option>
@@ -131,13 +146,14 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Date & Time</th>
+                                <th>Date &amp; Time</th>
                                 <th>Platform</th>
                                 <th>Order ID</th>
                                 <th>Customer</th>
                                 <th>Amount</th>
                                 <th>Status</th>
                                 <th>Payment</th>
+                                <th>Receipt</th>
                             </tr>
                         </thead>
                         <tbody id="historyBody"></tbody>
@@ -157,6 +173,7 @@
                     <select id="sPlatform" class="form-control" required>
                         <option value="Uber Eats">Uber Eats</option>
                         <option value="Bolt Food">Bolt Food</option>
+                            <option value="Tabaruq Delivery">Tabaruq Delivery</option>
                         <option value="Glovo">Glovo</option>
                     </select>
                 </div>
@@ -197,6 +214,7 @@
                         <option value="Uber Eats">Uber Eats</option>
                         <option value="Glovo">Glovo</option>
                         <option value="Bolt Food">Bolt Food</option>
+                            <option value="Tabaruq Delivery">Tabaruq Delivery</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -294,12 +312,13 @@
                                 <option value="Uber Eats">Uber Eats Only</option>
                                 <option value="Glovo">Glovo Only</option>
                                 <option value="Bolt Food">Bolt Food Only</option>
+                                <option value="Tabaruq Delivery">Tabaruq Delivery Only</option>
                             </select>
                         </div>
                         
                         <div id="diPricesContainer" style="margin-top:0.5rem; padding:0.75rem; background:rgba(255,255,255,0.05); border-radius:8px;">
                             <label style="color:var(--accent-magenta); font-weight:700; margin-bottom:0.5rem; display:block; font-size:0.85rem;">Delivery Prices (KES)</label>
-                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:0.5rem;">
                                 <div class="form-group" id="diUberPriceGroup">
                                     <label style="font-size:0.7rem;">Uber Price</label>
                                     <input type="number" id="diUberPrice" class="form-control" step="0.01" placeholder="e.g. 400">
@@ -311,6 +330,10 @@
                                 <div class="form-group" id="diBoltPriceGroup">
                                     <label style="font-size:0.7rem;">Bolt Price</label>
                                     <input type="number" id="diBoltPrice" class="form-control" step="0.01" placeholder="e.g. 400">
+                                </div>
+                                <div class="form-group" id="diOwnDeliveryPriceGroup">
+                                    <label style="font-size:0.7rem;">Tabaruq Delivery Price</label>
+                                    <input type="number" id="diOwnDeliveryPrice" class="form-control" step="0.01" placeholder="e.g. 400">
                                 </div>
                             </div>
                         </div>
@@ -399,14 +422,86 @@
                         <td><strong>${o.platform_order_id || '-'}</strong></td>
                         <td>${o.customer_name}</td>
                         <td style="font-weight:700;">${formatCurrency(o.total_amount)}</td>
-                        <td><span class="badge" style="background:${o.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${o.status}</span></td>
-                        <td><span class="badge" style="background:${o.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${o.payment_status}</span></td>
+                        <td><span class="badge" style="background:${o.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'};">${o.status}</span></td>
+                        <td><span class="badge" style="background:${o.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-danger)'};">${o.payment_status}</span></td>
+                        <td><button onclick="printDeliveryReceipt(${o.id})" style="background:none; border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:6px; padding:0.3rem 0.6rem; cursor:pointer; font-size:0.8rem;" title="Print Receipt"><i class="fas fa-print"></i> Print</button></td>
                     </tr>
                 `).join('');
             } catch (err) { console.error(err); }
         }
 
         let __deliveryItems = [];
+
+        async function printDeliveryReceipt(orderId) {
+            try {
+                const [orderRes, settingsRes] = await Promise.all([
+                    apiFetch(`/orders/${orderId}`),
+                    apiFetch('/settings/receipt')
+                ]);
+                const order = orderRes.data;
+                const s = settingsRes.data;
+
+                // Trigger cash drawer (silently ignore if not configured)
+                try { await apiFetch('/settings/open-drawer', { method: 'POST' }); } catch (_) {}
+
+                const hotelName = s.hotel_name || 'TABARUQ FOODS';
+                const phoneNum = s.phone_number || '';
+                const addressStr = s.address || '';
+                const paybillNum = s.mpesa_paybill || '';
+                const tillNum = s.mpesa_till || '';
+                const footerMsg = s.footer_message || 'Thank you!';
+
+                const itemsHtml = (order.items || []).map(i => `
+                    <tr>
+                        <td style="padding:5px 0;">${i.name} x${i.quantity}</td>
+                        <td style="text-align:right; padding:5px 0;">${formatCurrency(i.subtotal)}</td>
+                    </tr>
+                `).join('');
+
+                const printWindow = window.open('', '_blank', 'width=400,height=650');
+                printWindow.document.write(`
+                    <html><head><title>Receipt #${order.id}</title>
+                    <style>
+                        body { font-family: 'Courier New', Courier, monospace; font-size: 14px; padding: 20px; color: #000; }
+                        .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+                        .footer { text-align: center; border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; font-size: 12px; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                        .total { font-weight: bold; font-size: 16px; border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; text-align: right; }
+                        .meta-item { display: flex; justify-content: space-between; margin: 3px 0; font-size: 13px; }
+                        .platform-badge { display:inline-block; background:#333; color:#fff; padding:2px 8px; border-radius:4px; font-size:12px; }
+                    </style></head><body>
+                        <div class="header">
+                            <h2 style="margin:0; font-size:18px; letter-spacing:1px;">${hotelName}</h2>
+                            ${addressStr ? `<p style="margin:3px 0 0 0; font-size:12px;">${addressStr}</p>` : ''}
+                            ${phoneNum ? `<p style="margin:3px 0 0 0; font-size:12px;">Tel: ${phoneNum}</p>` : ''}
+                            <p style="margin:5px 0 0 0; font-size:12px;">*** DELIVERY RECEIPT ***</p>
+                        </div>
+                        <div style="margin-bottom:10px; border-bottom:1px dashed #000; padding-bottom:8px;">
+                            <div class="meta-item"><span>Order ID:</span> <strong>#${order.id}</strong></div>
+                            <div class="meta-item"><span>Platform:</span> <span class="platform-badge">${order.platform}</span></div>
+                            ${order.platform_order_id ? `<div class="meta-item"><span>Platform Ref:</span> <strong>${order.platform_order_id}</strong></div>` : ''}
+                            <div class="meta-item"><span>Date:</span> <span>${new Date(order.created_at).toLocaleString()}</span></div>
+                            <div class="meta-item"><span>Customer:</span> <span>${order.customer_name || 'Guest'}</span></div>
+                            <div class="meta-item"><span>Cashier:</span> <strong>${order.cashier_name || 'System'}</strong></div>
+                        </div>
+                        <table><tbody>${itemsHtml}</tbody></table>
+                        <div class="total">Total: ${formatCurrency(order.total_amount)}</div>
+                        ${(paybillNum || tillNum) ? `
+                        <div style="margin-top:15px; border-top:1px dashed #000; padding-top:8px; font-size:13px;">
+                            ${paybillNum ? `<div class="meta-item"><span>M-Pesa Paybill:</span> <strong>${paybillNum}</strong></div>` : ''}
+                            ${tillNum ? `<div class="meta-item"><span>M-Pesa Till:</span> <strong>${tillNum}</strong></div>` : ''}
+                        </div>` : ''}
+                        <div class="footer">
+                            <p style="margin:5px 0;">${footerMsg}</p>
+                            <p style="margin:5px 0;">Powered by TABARUQ Foods POS</p>
+                        </div>
+                        <script>window.onload = function() { window.print(); window.close(); }<\/script>
+                    </body></html>
+                `);
+                printWindow.document.close();
+            } catch (err) { alert('Failed to print receipt: ' + err.message); }
+        }
+
  
         async function loadDeliveryMenu() {
             try {
@@ -515,6 +610,7 @@
             document.getElementById('diUberPrice').value = item.uber_price || '';
             document.getElementById('diGlovoPrice').value = item.glovo_price || '';
             document.getElementById('diBoltPrice').value = item.bolt_price || '';
+                document.getElementById('diOwnDeliveryPrice').value = item.own_delivery_price || '';
 
             togglePlatformPriceFields();
             
@@ -631,6 +727,7 @@
                 uber_price: document.getElementById('diUberPrice').value ? parseFloat(document.getElementById('diUberPrice').value) : null,
                 glovo_price: document.getElementById('diGlovoPrice').value ? parseFloat(document.getElementById('diGlovoPrice').value) : null,
                 bolt_price: document.getElementById('diBoltPrice').value ? parseFloat(document.getElementById('diBoltPrice').value) : null,
+                own_delivery_price: document.getElementById('diOwnDeliveryPrice').value ? parseFloat(document.getElementById('diOwnDeliveryPrice').value) : null,
                 delivery_platform: document.getElementById('diPlatform').value || null,
                 is_delivery: true
             };
@@ -795,6 +892,7 @@
                 if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
                 if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                if (platform === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
 
                 return `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem; background:rgba(255,255,255,0.05); margin-bottom:0.5rem; border-radius:4px; cursor:pointer;" onclick="addToManualCart(${item.id})">
@@ -829,6 +927,7 @@
                 if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
                 if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                if (platform === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
 
                 total += price * item.quantity;
                 return `
@@ -864,6 +963,7 @@
                 if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
                 if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                if (platform === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
                 return acc + (price * item.quantity);
             }, 0);
 
@@ -886,6 +986,8 @@
             } catch (err) { alert("Server Error: " + err.message); }
         }
 
+        
+        
         if (user && user.role === 'admin') {
             loadReconciliation();
             loadStats();
