@@ -303,7 +303,7 @@ exports.saveCommissions = async (req, res) => {
 exports.getDeliveryOrders = async (req, res) => {
     const { status, period, platform } = req.query;
     try {
-        let query = 'SELECT o.*, u.username as cashier_name FROM orders o LEFT JOIN users u ON o.cashier_id = u.id WHERE o.platform IS NOT NULL';
+        let query = 'SELECT o.*, u.username as cashier_name FROM orders o LEFT JOIN users u ON o.cashier_id = u.id WHERE o.platform IS NOT NULL AND (o.scheduled_for IS NULL OR o.scheduled_released = 1)';
         const params = [];
         
         if (req.user.role !== 'admin') {

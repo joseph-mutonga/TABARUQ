@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduled Orders | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=5">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        .countdown-active {
+            color: #10b981;
+            font-weight: 700;
+        }
+        .countdown-due {
+            color: #f59e0b;
+            font-weight: 800;
+            animation: pulse 1.5s infinite;
+        }
+        .countdown-overdue {
+            color: #ef4444;
+            font-weight: 800;
+            animation: flash 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        @keyframes flash {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+        .items-summary {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.7);
+            line-height: 1.4;
+        }
+        .table-container {
+            max-height: 75vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
+                <li id="ordersNavLink" style="display:none;"><a href="orders.html"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li id="scheduledNavLink" style="display:none;"><a href="scheduled.html" class="active"><i class="fas fa-calendar-alt"></i> Scheduled Orders <span id="scheduledBadge" class="notification-badge">0</span></a></li>
+                <li id="deliveryNavLink" style="display:none;"><a href="../admin/delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Scheduled & Pre-Orders</h1>
+            <p style="color: #ffffff; margin-bottom: 1.5rem; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Manage upcoming scheduled deliveries and pickup pre-orders. These orders are automatically released to the kitchen display 30 minutes before they are due, or you can release them manually at any time.</p>
+
+            <div class="glass-card">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer Name</th>
+                                <th>Platform</th>
+                                <th>Items</th>
+                                <th>Total Amount</th>
+                                <th>Scheduled Time</th>
+                                <th>Time Remaining</th>
+                                <th>Payment</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scheduledOrdersBody">
+                            <tr>
+                                <td colspan="9" style="text-align: center; color: rgba(255,255,255,0.6); padding: 2rem;">Loading scheduled orders...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="../js/api.js"></script>
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        let scheduledOrders = [];
+        let countdownInterval = null;
+
+        if (!user || (user.role !== 'admin' && user.role !== 'cashier')) {
+            window.location.href = 'index.html';
+        } else {
+            if (user.role === 'admin') {
+                document.getElementById('adminNavLink').style.display = 'block';
+            }
+            document.getElementById('ordersNavLink').style.display = 'block';
+            document.getElementById('scheduledNavLink').style.display = 'block';
+            document.getElementById('deliveryNavLink').style.display = 'block';
+            
+            // Initial data load
+            loadScheduledOrders();
+            checkBadges();
+        }
+
+        async function loadScheduledOrders() {
+            try {
+                const res = await apiFetch('/orders/scheduled');
+                scheduledOrders = res.data || [];
+                renderScheduledOrders();
+                startCountdowns();
+            } catch (err) {
+                console.error(err);
+                document.getElementById('scheduledOrdersBody').innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; color: var(--accent-danger); padding: 2rem;">
+                            <i class="fas fa-exclamation-triangle"></i> Failed to load scheduled orders: ${err.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function formatTimeRemaining(targetTimeStr) {
+            const now = new Date();
+            const target = new Date(targetTimeStr);
+            const diffMs = target - now;
+
+            if (diffMs <= 0) {
+                const overdueMin = Math.floor(Math.abs(diffMs) / 60000);
+                if (overdueMin === 0) return { text: 'Due Now', class: 'countdown-due' };
+                return { text: `Overdue by ${overdueMin}m`, class: 'countdown-overdue' };
+            }
+
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 30) {
+                return { text: `Due in ${diffMins}m (Prep window)`, class: 'countdown-due' };
+            }
+
+            const diffHours = Math.floor(diffMins / 60);
+            const remainingMins = diffMins % 60;
+            
+            if (diffHours === 0) {
+                return { text: `In ${diffMins} mins`, class: 'countdown-active' };
+            }
+            return { text: `In ${diffHours}h ${remainingMins}m`, class: 'countdown-active' };
+        }
+
+        function renderScheduledOrders() {
+            const body = document.getElementById('scheduledOrdersBody');
+            if (scheduledOrders.length === 0) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; color: rgba(255,255,255,0.6); padding: 2rem;">
+                            No upcoming scheduled orders found.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            body.innerHTML = scheduledOrders.map(order => {
+                const scheduledDate = new Date(order.scheduled_for);
+                const timeString = scheduledDate.toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+
+                const countdown = formatTimeRemaining(order.scheduled_for);
+                const itemsSummary = (order.items || [])
+                    .map(i => `${i.quantity}x ${i.name || i.item_name}`)
+                    .join('<br>');
+
+                const paymentBadgeBg = order.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-warning)';
+
+                return `
+                    <tr id="order-${order.id}">
+                        <td><strong>#${order.id}</strong></td>
+                        <td>${order.customer_name}</td>
+                        <td>
+                            ${order.platform ? 
+                                `<span class="badge" style="background:#0f172a; border: 1px solid rgba(255,255,255,0.1);">${order.platform}</span>` : 
+                                `<span class="badge" style="background:#1e293b;">In-Hotel</span>`
+                            }
+                        </td>
+                        <td class="items-summary">${itemsSummary}</td>
+                        <td><strong>KES ${Number(order.total_amount).toLocaleString()}</strong></td>
+                        <td>${timeString}</td>
+                        <td><span class="${countdown.class}" data-target="${order.scheduled_for}">${countdown.text}</span></td>
+                        <td><span class="badge" style="background: ${paymentBadgeBg}">${order.payment_status}</span></td>
+                        <td>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-success" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #10b981;" onclick="releaseOrder(${order.id})">
+                                    <i class="fas fa-paper-plane"></i> Release
+                                </button>
+                                ${user.role === 'admin' ? 
+                                    `<button class="btn btn-danger" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-danger);" onclick="cancelOrder(${order.id})">
+                                        <i class="fas fa-trash"></i> Cancel
+                                     </button>` : ''
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function startCountdowns() {
+            if (countdownInterval) clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => {
+                const elements = document.querySelectorAll('[data-target]');
+                elements.forEach(el => {
+                    const target = el.getAttribute('data-target');
+                    const countdown = formatTimeRemaining(target);
+                    el.textContent = countdown.text;
+                    el.className = countdown.class;
+                });
+            }, 10000); // Update every 10 seconds
+        }
+
+        async function releaseOrder(id) {
+            if (!confirm(`Are you sure you want to release order #${id} to the kitchen now?`)) return;
+            try {
+                const res = await apiFetch(`/orders/${id}/release`, { method: 'POST' });
+                alert(res.message);
+                loadScheduledOrders();
+                checkBadges();
+            } catch (err) {
+                alert('Release failed: ' + err.message);
+            }
+        }
+
+        async function cancelOrder(id) {
+            if (!confirm(`Are you sure you want to cancel scheduled order #${id}?`)) return;
+            try {
+                await apiFetch(`/orders/${id}/status`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ status: 'cancelled', payment_status: 'pending' })
+                });
+                alert('Order cancelled successfully.');
+                loadScheduledOrders();
+                checkBadges();
+            } catch (err) {
+                alert('Cancellation failed: ' + err.message);
+            }
+        }
+
+        async function checkBadges() {
+            try {
+                // Pending payments badge
+                const payRes = await apiFetch('/payments/pending-count');
+                const pendingBadge = document.getElementById('pendingBadge');
+                if (pendingBadge) {
+                    if (payRes.count > 0) {
+                        pendingBadge.textContent = payRes.count;
+                        pendingBadge.style.display = 'inline-block';
+                    } else {
+                        pendingBadge.style.display = 'none';
+                    }
+                }
+
+                // Scheduled badge (count future scheduled orders)
+                const schedRes = await apiFetch('/orders/scheduled');
+                const scheduledBadge = document.getElementById('scheduledBadge');
+                if (scheduledBadge) {
+                    const count = schedRes.data ? schedRes.data.length : 0;
+                    if (count > 0) {
+                        scheduledBadge.textContent = count;
+                        scheduledBadge.style.display = 'inline-block';
+                    } else {
+                        scheduledBadge.style.display = 'none';
+                    }
+                }
+            } catch (err) { console.error('Error fetching badge counts:', err); }
+        }
+
+        // Live updates via Socket.io
+        socket.on('order_update', (data) => {
+            console.log('Realtime order update received:', data);
+            loadScheduledOrders();
+            checkBadges();
+        });
+
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+    </script>
+</body>
+</html>

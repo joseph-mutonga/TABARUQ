@@ -15,6 +15,7 @@
             <ul class="nav-links">
                 <li><a href="index.html" class="active"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
                 <li id="ordersNavLink" style="display:none;"><a href="orders.html"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li id="scheduledNavLink" style="display:none;"><a href="scheduled.html"><i class="fas fa-calendar-alt"></i> Scheduled Orders <span id="scheduledBadge" class="notification-badge">0</span></a></li>
                 <li id="deliveryNavLink" style="display:none;"><a href="../admin/delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
@@ -61,6 +62,16 @@
             <div class="form-group">
                 <label>Customer Name</label>
                 <input type="text" id="custName" class="form-control" placeholder="E.g., John Doe" style="margin-bottom: 1rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: #fff;">
+                    <input type="checkbox" id="isScheduledCheckbox" onchange="toggleScheduledFields()" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span>Schedule for Later / Pre-order</span>
+                </label>
+                <div id="scheduledFields" style="display: none; margin-top: 0.75rem;">
+                    <label style="font-size: 0.85rem; margin-bottom: 0.35rem; display: block; color: rgba(255,255,255,0.8);">Select Date & Time</label>
+                    <input type="datetime-local" id="scheduledForInput" class="form-control">
+                </div>
             </div>
             <div class="form-group">
                 <label>Payment Method</label>
@@ -243,6 +254,21 @@
         let cart = [];
         let selectedCategory = 'All';
 
+        function toggleScheduledFields() {
+            const isChecked = document.getElementById('isScheduledCheckbox').checked;
+            document.getElementById('scheduledFields').style.display = isChecked ? 'block' : 'none';
+            if (isChecked) {
+                const now = new Date();
+                now.setHours(now.getHours() + 1);
+                const yyyy = now.getFullYear();
+                const MM = String(now.getMonth() + 1).padStart(2, '0');
+                const dd = String(now.getDate()).padStart(2, '0');
+                const hh = String(now.getHours()).padStart(2, '0');
+                const mm = String(now.getMinutes()).padStart(2, '0');
+                document.getElementById('scheduledForInput').value = `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+            }
+        }
+
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user) window.location.href = '../index.html';
         document.getElementById('userInfo').textContent = user.username;
@@ -252,6 +278,7 @@
         }
         if (user.role === 'admin' || user.role === 'cashier') {
             document.getElementById('ordersNavLink').style.display = 'block';
+            document.getElementById('scheduledNavLink').style.display = 'block';
             document.getElementById('deliveryNavLink').style.display = 'block';
         }
 
@@ -686,6 +713,20 @@
             const platform = currentMethod === 'platform' ? document.getElementById('orderPlatform').value : 'none';
             const platform_order_id = currentMethod === 'platform' ? document.getElementById('platformOrderId').value : null;
 
+            const isScheduled = document.getElementById('isScheduledCheckbox').checked;
+            let scheduled_for = null;
+            if (isScheduled) {
+                scheduled_for = document.getElementById('scheduledForInput').value;
+                if (!scheduled_for) {
+                    alert('Please select a scheduled date and time.');
+                    return;
+                }
+                if (new Date(scheduled_for) <= new Date()) {
+                    alert('Scheduled time must be in the future.');
+                    return;
+                }
+            }
+
             try {
                 const orderResp = await apiFetch('/orders', {
                     method: 'POST',
@@ -694,7 +735,8 @@
                         total_amount: total, 
                         customer_name: customerName,
                         platform: platform !== 'none' ? platform : null,
-                        platform_order_id: platform_order_id
+                        platform_order_id: platform_order_id,
+                        scheduled_for: scheduled_for
                     })
                 });
 
@@ -750,8 +792,41 @@
             }
         };
 
+        async function checkBadges() {
+            try {
+                const response = await apiFetch('/payments/pending-count');
+                const badge = document.getElementById('pendingBadge');
+                if (badge) {
+                    if (response.count > 0) {
+                        badge.textContent = response.count;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+
+                const schedRes = await apiFetch('/orders/scheduled');
+                const schedBadge = document.getElementById('scheduledBadge');
+                if (schedBadge) {
+                    const count = schedRes.data ? schedRes.data.length : 0;
+                    if (count > 0) {
+                        schedBadge.textContent = count;
+                        schedBadge.style.display = 'inline-block';
+                    } else {
+                        schedBadge.style.display = 'none';
+                    }
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        socket.on('order_update', () => {
+            checkBadges();
+        });
+
         setPaymentMethod('mpesa_stk');
         loadMenu();
+        checkBadges();
+        setInterval(checkBadges, 10000);
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
     </script>
 </body>

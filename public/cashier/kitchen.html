@@ -52,6 +52,7 @@
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
                 <li><a href="kitchen.html" class="active"><i class="fas fa-tv"></i> Kitchen Display</a></li>
                 <li><a href="orders.html"><i class="fas fa-history"></i> Orders</a></li>
+                <li id="scheduledNavLink" style="display:none;"><a href="scheduled.html"><i class="fas fa-calendar-alt"></i> Scheduled Orders <span id="scheduledBadge" class="notification-badge">0</span></a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </aside>
@@ -153,6 +154,33 @@
         function playNotification() {
             const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
             audio.play();
+        }
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (user && (user.role === 'admin' || user.role === 'cashier')) {
+            document.getElementById('scheduledNavLink').style.display = 'block';
+            checkBadges();
+            setInterval(checkBadges, 10000);
+            
+            socket.on('order_update', () => {
+                checkBadges();
+            });
+        }
+
+        async function checkBadges() {
+            try {
+                const schedRes = await apiFetch('/orders/scheduled');
+                const schedBadge = document.getElementById('scheduledBadge');
+                if (schedBadge) {
+                    const count = schedRes.data ? schedRes.data.length : 0;
+                    if (count > 0) {
+                        schedBadge.textContent = count;
+                        schedBadge.style.display = 'inline-block';
+                    } else {
+                        schedBadge.style.display = 'none';
+                    }
+                }
+            } catch (err) { console.error(err); }
         }
 
         loadActiveOrders();

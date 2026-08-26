@@ -99,3 +99,176 @@ exports.openCashDrawer = async (req, res) => {
         res.status(500).json({ success: false, message: 'Could not open cash drawer: ' + err.message });
     }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STOCK DEDUCTION RULES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/settings/deduction-rules
+ * Returns all deduction rules with menu item & stock item names.
+ */
+exports.getDeductionRules = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT
+                sdr.id,
+                sdr.menu_item_id,
+                m.name  AS menu_item_name,
+                m.unit  AS menu_item_unit,
+                sdr.stock_item_id,
+                s.name  AS stock_item_name,
+                s.unit  AS stock_item_unit,
+                sdr.deduct_qty
+            FROM stock_deduction_rules sdr
+            JOIN inventory m ON m.id = sdr.menu_item_id
+            JOIN inventory s ON s.id = sdr.stock_item_id
+            ORDER BY m.name, s.name
+        `);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * POST /api/settings/deduction-rules
+ * Body: { menu_item_id, stock_item_id, deduct_qty }
+ * Creates or updates a deduction rule (upsert on the unique key).
+ */
+exports.saveDeductionRule = async (req, res) => {
+    const { menu_item_id, stock_item_id, deduct_qty } = req.body;
+
+    if (!menu_item_id || !stock_item_id || !deduct_qty) {
+        return res.status(400).json({ success: false, message: 'menu_item_id, stock_item_id and deduct_qty are required' });
+    }
+    if (Number(deduct_qty) <= 0) {
+        return res.status(400).json({ success: false, message: 'deduct_qty must be greater than 0' });
+    }
+    if (Number(menu_item_id) === Number(stock_item_id)) {
+        return res.status(400).json({ success: false, message: 'Menu item and stock item cannot be the same' });
+    }
+
+    try {
+        await db.execute(`
+            INSERT INTO stock_deduction_rules (menu_item_id, stock_item_id, deduct_qty)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE deduct_qty = VALUES(deduct_qty)
+        `, [menu_item_id, stock_item_id, deduct_qty]);
+
+        res.json({ success: true, message: 'Deduction rule saved' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * DELETE /api/settings/deduction-rules/:id
+ */
+exports.deleteDeductionRule = async (req, res) => {
+    const { id } = req.params;
+    try {
+        await db.execute('DELETE FROM stock_deduction_rules WHERE id = ?', [id]);
+        res.json({ success: true, message: 'Deduction rule deleted' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMBO / BUNDLE RECIPES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/settings/recipes
+ * Returns all recipes grouped by combo item.
+ */
+exports.getRecipes = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT
+                ir.id,
+                ir.combo_item_id,
+                c.name  AS combo_item_name,
+                ir.component_item_id,
+                p.name  AS component_item_name,
+                p.unit  AS component_unit,
+                ir.component_qty
+            FROM item_recipes ir
+            JOIN inventory c ON c.id = ir.combo_item_id
+            JOIN inventory p ON p.id = ir.component_item_id
+            ORDER BY c.name, p.name
+        `);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * POST /api/settings/recipes
+ * Replaces all recipe components for a combo item.
+ * Body: { combo_item_id, components: [{ component_item_id, component_qty }] }
+ */
+exports.saveRecipe = async (req, res) => {
+    const { combo_item_id, components } = req.body;
+
+    if (!combo_item_id || !Array.isArray(components) || components.length === 0) {
+        return res.status(400).json({ success: false, message: 'combo_item_id and at least one component are required' });
+    }
+
+    // Validate components
+    for (const c of components) {
+        if (!c.component_item_id || !c.component_qty || Number(c.component_qty) <= 0) {
+            return res.status(400).json({ success: false, message: 'Each component must have a valid item and quantity > 0' });
+        }
+        if (Number(c.component_item_id) === Number(combo_item_id)) {
+            return res.status(400).json({ success: false, message: 'A combo cannot have itself as a component' });
+        }
+    }
+
+    let conn;
+    try {
+        conn = await db.getConnection();
+        await conn.beginTransaction();
+
+        // Delete all existing recipe rows for this combo
+        await conn.execute('DELETE FROM item_recipes WHERE combo_item_id = ?', [combo_item_id]);
+
+        // Insert new components
+        for (const c of components) {
+            await conn.execute(
+                'INSERT INTO item_recipes (combo_item_id, component_item_id, component_qty) VALUES (?, ?, ?)',
+                [combo_item_id, c.component_item_id, c.component_qty]
+            );
+        }
+
+        await conn.commit();
+        res.json({ success: true, message: 'Recipe saved successfully' });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    } finally {
+        if (conn) conn.release();
+    }
+};
+
+/**
+ * DELETE /api/settings/recipes/:combo_item_id
+ * Deletes all recipe components for a given combo item.
+ */
+exports.deleteRecipe = async (req, res) => {
+    const { combo_item_id } = req.params;
+    try {
+        await db.execute('DELETE FROM item_recipes WHERE combo_item_id = ?', [combo_item_id]);
+        res.json({ success: true, message: 'Recipe deleted' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};

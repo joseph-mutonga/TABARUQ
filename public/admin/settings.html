@@ -14,16 +14,15 @@
             <h2>TABARUQ</h2>
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food &amp; Drinks POS</a></li>
                 <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
                 <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
-                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers &amp; Payroll</a></li>
                 <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
                 <li><a href="stocks.html"><i class="fas fa-warehouse"></i> Stocks</a></li>
                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
                 <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
-                
                 <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
                 <li><a href="settings.html" class="active"><i class="fas fa-cog"></i> Settings</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
@@ -34,7 +33,7 @@
             <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                 <div>
                     <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Settings</h1>
-                    <p class="card-small" style="color: rgba(255,255,255,0.85); font-weight: 500;">Configure system preferences, delivery platform commissions, and fees.</p>
+                    <p class="card-small" style="color: rgba(255,255,255,0.85); font-weight: 500;">Configure system preferences, delivery platform commissions, stock deduction rules, combo recipes and fees.</p>
                 </div>
             </header>
 
@@ -119,7 +118,130 @@
                     </div>
                 </form>
             </div>
+
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- STOCK DEDUCTION RULES                                        -->
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <div class="glass-card" style="margin-top:2rem;" id="deductionRulesCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <div>
+                        <h3 style="color:#ffffff; font-weight:800; margin:0;"><i class="fas fa-link"></i> Stock Deduction Rules</h3>
+                        <p class="card-small" style="color:var(--text-gray); margin-top:0.3rem;">
+                            When a menu item is sold, the linked stock item is automatically deducted.<br>
+                            <em style="color:rgba(255,255,255,0.5); font-size:0.82rem;">Example: Sell 1&times; Chipo &rarr; deduct 1 kg Viazi from stock.</em>
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" id="addRuleBtn" style="white-space:nowrap;"><i class="fas fa-plus"></i> Add Rule</button>
+                </div>
+
+                <!-- Add Rule inline form (hidden by default) -->
+                <div id="addRuleForm" style="display:none; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:0.75rem; padding:1.25rem; margin:1rem 0;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr 160px auto; gap:1rem; align-items:flex-end;">
+                        <div class="form-group" style="margin:0;">
+                            <label style="color:var(--text-gray); font-size:0.85rem; font-weight:500;">Menu Item (sold)</label>
+                            <select id="ruleMenuItemId" class="form-control" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                                <option value="">— Select item —</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="color:var(--text-gray); font-size:0.85rem; font-weight:500;">Stock Item (to deduct)</label>
+                            <select id="ruleStockItemId" class="form-control" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                                <option value="">— Select stock —</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="color:var(--text-gray); font-size:0.85rem; font-weight:500;">Qty per Sale</label>
+                            <input type="number" id="ruleDeductQty" class="form-control" min="0.001" step="0.001" placeholder="e.g. 1" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                        </div>
+                        <div style="display:flex; gap:0.5rem;">
+                            <button class="btn btn-primary" id="saveRuleBtn" style="padding:0.55rem 1rem;"><i class="fas fa-save"></i> Save</button>
+                            <button class="btn" id="cancelRuleBtn" style="padding:0.55rem 1rem; background:rgba(255,255,255,0.07); color:#fff;"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rules table -->
+                <div class="table-container" style="margin-top:1rem;">
+                    <table id="rulesTable">
+                        <thead>
+                            <tr>
+                                <th>Menu Item Sold</th>
+                                <th style="text-align:center;"><i class="fas fa-arrow-right" style="opacity:.5;"></i></th>
+                                <th>Stock Item Deducted</th>
+                                <th>Qty per Sale</th>
+                                <th style="text-align:center;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rulesTableBody">
+                            <tr><td colspan="5" style="text-align:center; color:var(--text-gray); padding:2rem;">Loading&hellip;</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- COMBO / BUNDLE RECIPES                                       -->
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <div class="glass-card" style="margin-top:2rem;" id="recipesCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <div>
+                        <h3 style="color:#ffffff; font-weight:800; margin:0;"><i class="fas fa-layer-group"></i> Combo / Bundle Recipes</h3>
+                        <p class="card-small" style="color:var(--text-gray); margin-top:0.3rem;">
+                            Define what components make up a combo item. When the combo is sold, each component is deducted individually.<br>
+                            <em style="color:rgba(255,255,255,0.5); font-size:0.82rem;">Example: Sell 1&times; Savoury &rarr; deduct 1 Samosa + 3 Viazi Karai + 1 Sausage.</em>
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" id="addRecipeBtn" style="white-space:nowrap;"><i class="fas fa-plus"></i> Add Combo Recipe</button>
+                </div>
+
+                <!-- Recipes table -->
+                <div class="table-container" style="margin-top:1rem;">
+                    <table id="recipesTable">
+                        <thead>
+                            <tr>
+                                <th>Combo / Bundle Item</th>
+                                <th>Components (deducted when sold)</th>
+                                <th style="text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recipesTableBody">
+                            <tr><td colspan="3" style="text-align:center; color:var(--text-gray); padding:2rem;">Loading&hellip;</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </main>
+    </div>
+
+    <!-- ════ COMBO RECIPE MODAL ═══════════════════════════════════════════════ -->
+    <div id="recipeModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.82); z-index:2000; justify-content:center; align-items:center;">
+        <div style="background:var(--card-bg,#1e1e2e); border-radius:1rem; padding:2rem; width:560px; max-height:85vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                <h3 style="color:#fff; font-weight:800; margin:0;" id="recipeModalTitle"><i class="fas fa-layer-group"></i> Combo Recipe</h3>
+                <button onclick="closeRecipeModal()" style="background:transparent; border:none; color:rgba(255,255,255,0.6); font-size:1.3rem; cursor:pointer;"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="form-group">
+                <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Combo / Bundle Item</label>
+                <select id="recipeComboItemId" class="form-control" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                    <option value="">— Select combo item —</option>
+                </select>
+            </div>
+
+            <div style="margin-top:1.25rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Components</label>
+                    <button type="button" onclick="addComponentRow()" class="btn btn-primary" style="padding:0.35rem 0.9rem; font-size:0.82rem;"><i class="fas fa-plus"></i> Add Component</button>
+                </div>
+                <div id="componentRows"></div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+                <button onclick="closeRecipeModal()" class="btn" style="background:rgba(255,255,255,0.07); color:#fff; padding:0.6rem 1.4rem;">Cancel</button>
+                <button onclick="saveRecipe()" class="btn btn-primary" style="padding:0.6rem 1.4rem;"><i class="fas fa-save"></i> Save Recipe</button>
+            </div>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
@@ -127,6 +249,7 @@
         const user = JSON.parse(localStorage.getItem('user'));
         if (!user || user.role !== 'admin') window.location.href = '../index.html';
 
+        // ─── Pending payments badge ───────────────────────────────────────────
         async function checkPendingPayments() {
             try {
                 const response = await apiFetch('/payments/pending-count');
@@ -147,6 +270,7 @@
             window.location.href = '../index.html';
         };
 
+        // ─── Commission Settings ──────────────────────────────────────────────
         async function loadCommissionSettings() {
             try {
                 const res = await apiFetch('/delivery/commissions');
@@ -171,10 +295,11 @@
                     method: 'POST',
                     body: JSON.stringify({ uber_percentage, glovo_percentage, bolt_percentage, own_delivery_percentage })
                 });
-                alert('Commission settings saved successfully!');
-            } catch (err) { alert(err.message); }
+                showToast('Commission settings saved!', 'success');
+            } catch (err) { showToast(err.message, 'error'); }
         };
 
+        // ─── Receipt Settings ─────────────────────────────────────────────────
         async function loadReceiptSettings() {
             try {
                 const res = await apiFetch('/settings/receipt');
@@ -207,13 +332,298 @@
                     method: 'POST',
                     body: JSON.stringify({ hotel_name, phone_number, address, mpesa_paybill, mpesa_till, footer_message, printer_ip, printer_port })
                 });
-                alert('Receipt settings saved successfully!');
-            } catch (err) { alert(err.message); }
+                showToast('Receipt settings saved!', 'success');
+            } catch (err) { showToast(err.message, 'error'); }
         };
 
+        // ─── Inventory items cache (for dropdowns) ────────────────────────────
+        let allItems = [];
+
+        async function loadAllItems() {
+            try {
+                const res = await apiFetch('/inventory');
+                allItems = res.data || [];
+            } catch (err) { console.error(err); }
+        }
+
+        function populateDropdown(selectEl, items, selectedId = null) {
+            selectEl.innerHTML = '<option value="">— Select item —</option>';
+            items.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = `${item.name} (${item.unit || 'pcs'})`;
+                if (selectedId && item.id == selectedId) opt.selected = true;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        // ─── STOCK DEDUCTION RULES ────────────────────────────────────────────
+        let deductionRules = [];
+
+        async function loadDeductionRules() {
+            try {
+                const res = await apiFetch('/settings/deduction-rules');
+                deductionRules = res.data || [];
+                renderRulesTable();
+            } catch (err) { console.error(err); }
+        }
+
+        function renderRulesTable() {
+            const tbody = document.getElementById('rulesTableBody');
+            if (deductionRules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-gray); padding:2rem;">
+                    <i class="fas fa-info-circle" style="margin-right:0.5rem; opacity:0.5;"></i>No deduction rules configured yet. Click <strong>Add Rule</strong> to create one.
+                </td></tr>`;
+                return;
+            }
+            tbody.innerHTML = deductionRules.map(r => `
+                <tr>
+                    <td><strong style="color:#fff;">${r.menu_item_name}</strong> <span style="color:var(--text-gray); font-size:0.8rem;">(${r.menu_item_unit || 'pcs'})</span></td>
+                    <td style="text-align:center; color:var(--primary,#6366f1);"><i class="fas fa-arrow-right"></i></td>
+                    <td><strong style="color:#a5b4fc;">${r.stock_item_name}</strong> <span style="color:var(--text-gray); font-size:0.8rem;">(${r.stock_item_unit || 'pcs'})</span></td>
+                    <td><span style="background:rgba(99,102,241,0.18); color:#a5b4fc; border-radius:0.4rem; padding:0.2rem 0.6rem; font-weight:600;">
+                        ${parseFloat(r.deduct_qty)} ${r.stock_item_unit || 'pcs'}
+                    </span></td>
+                    <td style="text-align:center;">
+                        <button onclick="deleteRule(${r.id})" class="btn" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.25); padding:0.35rem 0.8rem; font-size:0.82rem;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Show / hide add-rule inline form
+        document.getElementById('addRuleBtn').onclick = () => {
+            const form = document.getElementById('addRuleForm');
+            const isVisible = form.style.display !== 'none';
+            form.style.display = isVisible ? 'none' : 'block';
+            if (!isVisible) {
+                populateDropdown(document.getElementById('ruleMenuItemId'), allItems);
+                populateDropdown(document.getElementById('ruleStockItemId'), allItems);
+            }
+        };
+
+        document.getElementById('cancelRuleBtn').onclick = () => {
+            document.getElementById('addRuleForm').style.display = 'none';
+            document.getElementById('ruleMenuItemId').value = '';
+            document.getElementById('ruleStockItemId').value = '';
+            document.getElementById('ruleDeductQty').value = '';
+        };
+
+        document.getElementById('saveRuleBtn').onclick = async () => {
+            const menu_item_id = document.getElementById('ruleMenuItemId').value;
+            const stock_item_id = document.getElementById('ruleStockItemId').value;
+            const deduct_qty = document.getElementById('ruleDeductQty').value;
+
+            if (!menu_item_id || !stock_item_id || !deduct_qty) {
+                showToast('Please fill in all fields', 'error'); return;
+            }
+            if (menu_item_id === stock_item_id) {
+                showToast('Menu item and stock item cannot be the same', 'error'); return;
+            }
+            try {
+                await apiFetch('/settings/deduction-rules', {
+                    method: 'POST',
+                    body: JSON.stringify({ menu_item_id, stock_item_id, deduct_qty })
+                });
+                showToast('Deduction rule saved!', 'success');
+                document.getElementById('cancelRuleBtn').click();
+                await loadDeductionRules();
+            } catch (err) { showToast(err.message, 'error'); }
+        };
+
+        async function deleteRule(id) {
+            if (!confirm('Delete this deduction rule?')) return;
+            try {
+                await apiFetch(`/settings/deduction-rules/${id}`, { method: 'DELETE' });
+                showToast('Rule deleted', 'success');
+                await loadDeductionRules();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // ─── COMBO / BUNDLE RECIPES ───────────────────────────────────────────
+        let allRecipes = [];
+        let editingComboId = null;
+
+        async function loadRecipes() {
+            try {
+                const res = await apiFetch('/settings/recipes');
+                allRecipes = res.data || [];
+                renderRecipesTable();
+            } catch (err) { console.error(err); }
+        }
+
+        function renderRecipesTable() {
+            const tbody = document.getElementById('recipesTableBody');
+            if (allRecipes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-gray); padding:2rem;">
+                    <i class="fas fa-info-circle" style="margin-right:0.5rem; opacity:0.5;"></i>No combo recipes configured yet. Click <strong>Add Combo Recipe</strong> to create one.
+                </td></tr>`;
+                return;
+            }
+
+            // Group by combo item
+            const grouped = {};
+            allRecipes.forEach(r => {
+                if (!grouped[r.combo_item_id]) {
+                    grouped[r.combo_item_id] = { name: r.combo_item_name, components: [] };
+                }
+                grouped[r.combo_item_id].components.push(r);
+            });
+
+            tbody.innerHTML = Object.entries(grouped).map(([comboId, group]) => {
+                const componentTags = group.components.map(c =>
+                    `<span style="display:inline-flex; align-items:center; gap:0.35rem; background:rgba(99,102,241,0.14); color:#a5b4fc; border-radius:0.4rem; padding:0.2rem 0.65rem; font-size:0.82rem; margin:0.15rem;">
+                        <strong>${parseFloat(c.component_qty)}&times;</strong> ${c.component_item_name}
+                        <span style="opacity:0.5;">(${c.component_unit || 'pcs'})</span>
+                    </span>`
+                ).join('');
+
+                return `<tr>
+                    <td><strong style="color:#fff;">${group.name}</strong></td>
+                    <td style="line-height:2;">${componentTags}</td>
+                    <td style="text-align:center; white-space:nowrap;">
+                        <button onclick="openRecipeModal(${comboId})" class="btn" style="background:rgba(99,102,241,0.15); color:#a5b4fc; border:1px solid rgba(99,102,241,0.25); padding:0.35rem 0.8rem; font-size:0.82rem; margin-right:0.4rem;">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="deleteRecipe(${comboId})" class="btn" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.25); padding:0.35rem 0.8rem; font-size:0.82rem;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        document.getElementById('addRecipeBtn').onclick = () => openRecipeModal(null);
+
+        function openRecipeModal(comboId) {
+            editingComboId = comboId;
+            document.getElementById('recipeModalTitle').innerHTML = comboId
+                ? '<i class="fas fa-layer-group"></i> Edit Combo Recipe'
+                : '<i class="fas fa-layer-group"></i> New Combo Recipe';
+
+            populateDropdown(document.getElementById('recipeComboItemId'), allItems, comboId);
+
+            // Pre-fill components if editing
+            const componentRows = document.getElementById('componentRows');
+            componentRows.innerHTML = '';
+            componentRowCount = 0;
+
+            if (comboId) {
+                const existing = allRecipes.filter(r => r.combo_item_id == comboId);
+                existing.forEach(r => addComponentRow(r.component_item_id, r.component_qty));
+            } else {
+                addComponentRow(); // start with one empty row
+            }
+
+            document.getElementById('recipeModal').style.display = 'flex';
+        }
+
+        function closeRecipeModal() {
+            document.getElementById('recipeModal').style.display = 'none';
+            editingComboId = null;
+        }
+
+        let componentRowCount = 0;
+        function addComponentRow(selectedItemId = null, qty = '') {
+            componentRowCount++;
+            const rowId = `compRow_${componentRowCount}`;
+            const div = document.createElement('div');
+            div.id = rowId;
+            div.style.cssText = 'display:grid; grid-template-columns:1fr 140px 40px; gap:0.75rem; align-items:center; margin-bottom:0.6rem;';
+
+            const sel = document.createElement('select');
+            sel.className = 'form-control';
+            sel.style.cssText = 'background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;';
+            populateDropdown(sel, allItems, selectedItemId);
+
+            const inp = document.createElement('input');
+            inp.type = 'number';
+            inp.min = '0.001';
+            inp.step = '0.001';
+            inp.placeholder = 'Qty';
+            inp.value = qty;
+            inp.className = 'form-control';
+            inp.style.cssText = 'background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;';
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.innerHTML = '<i class="fas fa-minus"></i>';
+            btn.style.cssText = 'background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:0.5rem; padding:0.45rem 0.6rem; cursor:pointer;';
+            btn.onclick = () => div.remove();
+
+            div.appendChild(sel);
+            div.appendChild(inp);
+            div.appendChild(btn);
+            document.getElementById('componentRows').appendChild(div);
+        }
+
+        async function saveRecipe() {
+            const combo_item_id = document.getElementById('recipeComboItemId').value;
+            if (!combo_item_id) { showToast('Please select the combo item', 'error'); return; }
+
+            const rows = document.getElementById('componentRows').children;
+            const components = [];
+            let valid = true;
+
+            for (const row of rows) {
+                const sel = row.querySelector('select');
+                const inp = row.querySelector('input');
+                if (!sel || !sel.value || !inp || !inp.value || parseFloat(inp.value) <= 0) { valid = false; break; }
+                if (sel.value == combo_item_id) { showToast('A combo cannot contain itself as a component', 'error'); return; }
+                components.push({ component_item_id: sel.value, component_qty: inp.value });
+            }
+
+            if (!valid || components.length === 0) {
+                showToast('Please fill in all component items and quantities', 'error'); return;
+            }
+
+            try {
+                await apiFetch('/settings/recipes', {
+                    method: 'POST',
+                    body: JSON.stringify({ combo_item_id, components })
+                });
+                showToast('Combo recipe saved!', 'success');
+                closeRecipeModal();
+                await loadRecipes();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        async function deleteRecipe(comboId) {
+            if (!confirm('Delete this combo recipe? This will remove all component mappings.')) return;
+            try {
+                await apiFetch(`/settings/recipes/${comboId}`, { method: 'DELETE' });
+                showToast('Recipe deleted', 'success');
+                await loadRecipes();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // ─── Toast notification ───────────────────────────────────────────────
+        function showToast(msg, type = 'success') {
+            const existing = document.getElementById('settingsToast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'settingsToast';
+            const bg = type === 'success' ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
+            toast.style.cssText = `position:fixed; bottom:2rem; right:2rem; background:${bg}; color:#fff;
+                padding:0.85rem 1.4rem; border-radius:0.75rem; font-weight:600; font-size:0.9rem;
+                box-shadow:0 8px 32px rgba(0,0,0,0.35); z-index:9999; display:flex; align-items:center; gap:0.6rem;
+                animation:slideInRight 0.3s ease;`;
+            toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        // ─── Init ─────────────────────────────────────────────────────────────
         async function init() {
-            await loadCommissionSettings();
-            await loadReceiptSettings();
+            await Promise.all([
+                loadCommissionSettings(),
+                loadReceiptSettings(),
+                loadAllItems()
+            ]);
+            await Promise.all([loadDeductionRules(), loadRecipes()]);
             checkPendingPayments();
             setInterval(checkPendingPayments, 30000);
             if (typeof socket !== 'undefined' && socket) {
@@ -224,5 +634,11 @@
 
         init();
     </script>
+    <style>
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(60px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+    </style>
 </body>
 </html>

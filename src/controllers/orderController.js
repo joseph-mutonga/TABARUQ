@@ -1,7 +1,7 @@
 const db = require('../config/db');
 
 exports.createOrder = async (req, res) => {
-    const { items, total_amount, customer_name, platform, platform_order_id, isMerge, mergedOrderIds } = req.body;
+    const { items, total_amount, customer_name, platform, platform_order_id, isMerge, mergedOrderIds, scheduled_for } = req.body;
     const connection = await db.getConnection();
     
     try {
@@ -12,9 +12,21 @@ exports.createOrder = async (req, res) => {
             nameToSave = nameToSave.substring(0, 252) + '...';
         }
 
+        let scheduledForDate = null;
+        let scheduledReleased = 1;
+        if (scheduled_for) {
+            const parsedDate = new Date(scheduled_for);
+            if (!isNaN(parsedDate.getTime())) {
+                scheduledForDate = parsedDate;
+                if (parsedDate > new Date()) {
+                    scheduledReleased = 0;
+                }
+            }
+        }
+
         const [orderResult] = await connection.execute(
-            'INSERT INTO orders (cashier_id, total_amount, status, payment_status, customer_name, platform, platform_order_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [req.user.id, Number(total_amount) || 0, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null]
+            'INSERT INTO orders (cashier_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [req.user.id, Number(total_amount) || 0, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
         );
         const orderId = orderResult.insertId;
 
@@ -67,17 +79,53 @@ exports.createOrder = async (req, res) => {
             );
 
             if (!isMerge) {
-                // 2. Deduct Stock
+                // 2. Deduct the sold item's own stock
                 await connection.execute(
                     'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
                     [item.quantity, item.id]
                 );
 
-                // 3. Log Stock Change
+                // 3. Log direct stock change
                 await connection.execute(
                     'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
                     [item.id, req.user.id, -item.quantity, `Sale - Order #${orderId}`]
                 );
+
+                // ── 4. Apply Stock Deduction Rules ────────────────────────────
+                // e.g. selling "Chipo" also deducts 1 kg of "Viazi" from stock
+                const [deductionRules] = await connection.execute(
+                    'SELECT stock_item_id, deduct_qty FROM stock_deduction_rules WHERE menu_item_id = ?',
+                    [item.id]
+                );
+                for (const rule of deductionRules) {
+                    const totalDeduct = parseFloat(rule.deduct_qty) * item.quantity;
+                    await connection.execute(
+                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
+                        [totalDeduct, rule.stock_item_id]
+                    );
+                    await connection.execute(
+                        'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
+                        [rule.stock_item_id, req.user.id, -totalDeduct, `Auto-deduct (rule) - Order #${orderId} via item #${item.id}`]
+                    );
+                }
+
+                // ── 5. Apply Combo / Bundle Recipe Deductions ─────────────────
+                // e.g. selling "Savoury" deducts 1 Samosa + 3 Viazi Karai + 1 Sausage
+                const [recipeComponents] = await connection.execute(
+                    'SELECT component_item_id, component_qty FROM item_recipes WHERE combo_item_id = ?',
+                    [item.id]
+                );
+                for (const comp of recipeComponents) {
+                    const totalDeduct = parseFloat(comp.component_qty) * item.quantity;
+                    await connection.execute(
+                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
+                        [totalDeduct, comp.component_item_id]
+                    );
+                    await connection.execute(
+                        'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
+                        [comp.component_item_id, req.user.id, -totalDeduct, `Combo deduct - Order #${orderId} via ${item.name || 'item #' + item.id}`]
+                    );
+                }
             }
         }
 
@@ -104,6 +152,24 @@ exports.createOrder = async (req, res) => {
         if (io) {
             io.emit('order_update', { type: 'new', orderId });
             io.emit('stock_update', { items: items.map(i => i.id) });
+            
+            // If it is a delivery platform order and is immediately released, notify kitchen
+            if (platform && scheduledReleased === 1) {
+                const formattedItems = items.map(item => ({
+                    name: item.name || item.item_name || 'Item',
+                    quantity: item.quantity,
+                    price: Number(item.selling_price) || Number(item.price) || 0
+                }));
+                io.emit('new_delivery_order', {
+                    id: orderId,
+                    platform,
+                    platform_order_id: platform_order_id || `#${orderId}`,
+                    customer_name: nameToSave,
+                    items: formattedItems,
+                    total: Number(total_amount),
+                    status: 'pending'
+                });
+            }
         }
 
         res.status(201).json({ success: true, orderId, message: 'Order created successfully' });
@@ -193,5 +259,95 @@ exports.updateOrderStatus = async (req, res) => {
     } catch (err) {
         console.error('updateOrderStatus error:', err);
         res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    }
+};
+
+exports.getScheduledOrders = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT o.*, COALESCE(u.username, o.platform, 'Delivery') as cashier_name 
+            FROM orders o 
+            LEFT JOIN users u ON o.cashier_id = u.id 
+            WHERE o.status != 'merged' AND o.status != 'cancelled' AND o.scheduled_for > NOW() AND o.scheduled_released = 0
+            ORDER BY o.scheduled_for ASC
+        `);
+        
+        for (const order of rows) {
+            const [items] = await db.execute(`
+                SELECT oi.*, COALESCE(i.name, oi.item_name) as name 
+                FROM order_items oi 
+                LEFT JOIN inventory i ON oi.item_id = i.id 
+                WHERE oi.order_id = ?
+            `, [order.id]);
+            order.items = items;
+        }
+
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('ERROR IN GET_SCHEDULED_ORDERS:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.releaseScheduledOrder = async (req, res) => {
+    const { id } = req.params;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [orderRows] = await connection.execute('SELECT * FROM orders WHERE id = ?', [id]);
+        if (orderRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const order = orderRows[0];
+
+        // Update order status to released
+        await connection.execute(
+            'UPDATE orders SET scheduled_released = 1, scheduled_for = CURRENT_TIMESTAMP WHERE id = ?',
+            [id]
+        );
+
+        // Fetch order items to emit
+        const [items] = await connection.execute(`
+            SELECT oi.*, COALESCE(i.name, oi.item_name) as name 
+            FROM order_items oi 
+            LEFT JOIN inventory i ON oi.item_id = i.id 
+            WHERE oi.order_id = ?
+        `, [id]);
+
+        await connection.commit();
+
+        // Emit Socket Events
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('order_update', { type: 'status', orderId: id, status: order.status, payment_status: order.payment_status });
+            
+            // If it's a delivery platform order, emit to kitchen display
+            if (order.platform) {
+                const formattedItems = items.map(item => ({
+                    name: item.name || item.item_name || 'Item',
+                    quantity: item.quantity,
+                    price: Number(item.price) || 0
+                }));
+                io.emit('new_delivery_order', {
+                    id: order.id,
+                    platform: order.platform,
+                    platform_order_id: order.platform_order_id || `#${order.id}`,
+                    customer_name: order.customer_name,
+                    items: formattedItems,
+                    total: Number(order.total_amount),
+                    status: order.status
+                });
+            }
+        }
+
+        res.json({ success: true, message: 'Order released to kitchen successfully' });
+    } catch (err) {
+        await connection.rollback();
+        console.error('ERROR IN RELEASE_SCHEDULED_ORDER:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    } finally {
+        connection.release();
     }
 };

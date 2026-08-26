@@ -15,6 +15,7 @@
             <ul class="nav-links">
                 <li><a href="index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
                 <li id="ordersNavLink" style="display:none;"><a href="orders.html" class="active"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
+                <li id="scheduledNavLink" style="display:none;"><a href="scheduled.html"><i class="fas fa-calendar-alt"></i> Scheduled Orders <span id="scheduledBadge" class="notification-badge">0</span></a></li>
                 <li id="deliveryNavLink" style="display:none;"><a href="../admin/delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
                 <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
@@ -506,6 +507,19 @@
                 } else {
                     badge.style.display = 'none';
                 }
+
+                // Also update scheduled badge
+                const schedRes = await apiFetch('/orders/scheduled');
+                const schedBadge = document.getElementById('scheduledBadge');
+                if (schedBadge) {
+                    const count = schedRes.data ? schedRes.data.length : 0;
+                    if (count > 0) {
+                        schedBadge.textContent = count;
+                        schedBadge.style.display = 'inline-block';
+                    } else {
+                        schedBadge.style.display = 'none';
+                    }
+                }
             } catch (err) { console.error(err); }
         }
 
@@ -848,6 +862,7 @@
                 document.getElementById('adminNavLink').style.display = 'block';
             }
             document.getElementById('ordersNavLink').style.display = 'block';
+            document.getElementById('scheduledNavLink').style.display = 'block';
             document.getElementById('deliveryNavLink').style.display = 'block';
             loadData();
         }

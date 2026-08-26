@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_name VARCHAR(255) DEFAULT 'Guest',
     platform VARCHAR(50) DEFAULT NULL,
     platform_order_id VARCHAR(100) DEFAULT NULL,
+    scheduled_for TIMESTAMP NULL DEFAULT NULL,
+    scheduled_released TINYINT(1) DEFAULT 0,
     UNIQUE KEY platform_order (platform, platform_order_id),
     INDEX idx_orders_created_at (created_at),
     FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
