@@ -687,11 +687,28 @@ tbody tr:hover td {
     justify-content: center;
     position: relative;
     z-index: 1;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+.login-container::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image: url('../images/logo-watermark.svg');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: min(76vw, 680px);
+    opacity: 0.9;
+    pointer-events: none;
 }
 
 .login-card {
     max-width: 400px;
     width: 90%;
+    position: relative;
+    z-index: 1;
 }
 
 .order-grid {
