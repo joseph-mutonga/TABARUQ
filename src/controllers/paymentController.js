@@ -96,86 +96,6 @@ function buildStkCallbackDisplayMessage(resultDesc, amountDecimal, payerName, ph
     return clipMpesaMessage(parts.join(' — '));
 }
 
-exports.initiateSTKPush = async (req, res) => {
-    const { phoneNumber, amount, orderId, customer_name, skipSTK, paymentId } = req.body;
-    let cleanCustomerName = customer_name || 'Guest';
-    if (cleanCustomerName.length > 255) {
-        cleanCustomerName = cleanCustomerName.substring(0, 252) + '...';
-    }
-
-    try {
-        // 1. Create/Update payment record in DB
-        let checkoutID = skipSTK ? `OFFLINE-${Date.now()}` : null;
-        
-        let targetPaymentId = paymentId;
-        
-        // If no paymentId provided, we check if there's an existing one ONLY if it's NOT a split/new initiation
-        // Actually, safer: only update if paymentId is provided. 
-        // This ensures split payments (which call this twice) create two records.
-        
-        if (targetPaymentId) {
-            await db.execute(
-                'UPDATE payments SET amount = ?, phone_number = ?, mpesa_checkout_id = ?, status = "pending", customer_name = ? WHERE id = ?',
-                [amount, phoneNumber || null, checkoutID, cleanCustomerName, targetPaymentId]
-            );
-        } else {
-            const [result] = await db.execute(
-                'INSERT INTO payments (order_id, amount, phone_number, mpesa_checkout_id, status, customer_name) VALUES (?, ?, ?, ?, ?, ?)',
-                [orderId, amount, phoneNumber || null, checkoutID, 'pending', cleanCustomerName]
-            );
-            targetPaymentId = result.insertId;
-        }
-
-        const currentPaymentId = targetPaymentId;
-
-        if (skipSTK) {
-            return res.json({ success: true, message: 'Offline payment record created.' });
-        }
-
-        // 2. If not skipping, proceed to STK Push
-        const token = await getMpesaToken();
-        const timestamp = generateTimestamp();
-        const shortCode = process.env.MPESA_STK_SHORTCODE || process.env.MPESA_SHORTCODE;
-        const passkey = process.env.MPESA_PASSKEY;
-        const password = Buffer.from(`${shortCode}${passkey}${timestamp}`).toString('base64');
-
-        const response = await axios.post(
-            process.env.MPESA_STKPUSH_URL || 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
-            {
-                BusinessShortCode: shortCode,
-                Password: password,
-                Timestamp: timestamp,
-                TransactionType: 'CustomerPayBillOnline',
-                Amount: Math.round(amount),
-                PartyA: phoneNumber,
-                PartyB: shortCode,
-                PhoneNumber: phoneNumber,
-                CallBackURL: process.env.MPESA_CALLBACK_URL,
-                AccountReference: `TABARUQ-${orderId}`,
-                TransactionDesc: `Payment for Order #${orderId}`,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-
-        if (response.data.ResponseCode === '0') {
-            const realCheckoutID = response.data.CheckoutRequestID;
-            // Update the record with the real checkout ID
-            await db.execute('UPDATE payments SET mpesa_checkout_id = ? WHERE id = ?', [realCheckoutID, currentPaymentId]);
-            res.json({ success: true, message: 'STK Push sent successfully', checkoutID: realCheckoutID });
-        } else {
-            res.status(400).json({ success: false, message: response.data.ResponseDescription });
-        }
-
-    } catch (error) {
-        console.error('STK Push Error:', error.response?.data || error.message);
-        res.status(500).json({ success: false, message: 'Payment gateway error' });
-    }
-};
-
 exports.mpesaCallback = async (req, res) => {
     console.log('--- Incoming M-Pesa Callback ---');
     console.log(JSON.stringify(req.body, null, 2));
@@ -391,6 +311,17 @@ exports.mpesaC2BConfirmation = async (req, res) => {
         try {
             await conn.beginTransaction();
 
+            // Safaricom may retry callbacks. Do not create a second payment for
+            // a transaction that has already been accepted.
+            const [duplicateRows] = await conn.execute(
+                'SELECT id FROM payments WHERE transaction_id = ? LIMIT 1 FOR UPDATE',
+                [TransID]
+            );
+            if (duplicateRows.length > 0) {
+                await conn.commit();
+                return res.json({ ResultCode: 0, ResultDesc: 'Success' });
+            }
+
             const [ins] = await conn.execute(
                 'INSERT INTO payments (order_id, amount, transaction_id, phone_number, status, customer_name, payment_method, confirmed_at, mpesa_result_message) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
                 [orderId, amountDecimal, TransID, MSISDN, 'confirmed', customerName, 'M-Pesa (Buy Goods)', c2bMessage]
@@ -436,6 +367,28 @@ exports.confirmPayment = async (req, res) => {
     try {
         conn = await db.getConnection();
         await conn.beginTransaction();
+
+        const [paymentRows] = await conn.execute(
+            'SELECT amount, status, order_id FROM payments WHERE id = ? FOR UPDATE',
+            [paymentId]
+        );
+        const [orderRows] = await conn.execute('SELECT id FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+        if (paymentRows.length === 0 || orderRows.length === 0) {
+            await conn.rollback();
+            return res.status(404).json({ success: false, message: 'Payment or order not found' });
+        }
+        if (!Number.isFinite(Number(paymentRows[0].amount)) || Number(paymentRows[0].amount) <= 0) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'Payment amount must be greater than zero' });
+        }
+        if (paymentRows[0].status === 'confirmed' && Number(paymentRows[0].order_id) === Number(orderId)) {
+            await conn.commit();
+            return res.json({ success: true, message: 'Payment was already confirmed' });
+        }
+        if (paymentRows[0].status === 'confirmed') {
+            await conn.rollback();
+            return res.status(409).json({ success: false, message: 'Payment is already linked to another order' });
+        }
 
         // Update payment with orderId and status
         await conn.execute(
@@ -488,6 +441,8 @@ exports.getPayments = async (req, res) => {
                     p.confirmed_at,
                     p.confirmed_by,
                     COALESCE(p.customer_name, o.customer_name) AS customer_name,
+                    (SELECT GROUP_CONCAT(CONCAT(COALESCE(oi.item_name, 'Item'), ' × ', oi.quantity) ORDER BY oi.id SEPARATOR ', ')
+                     FROM order_items oi WHERE oi.order_id = o.id) AS items_summary,
                     COALESCE(p.mpesa_result_message,
                         CASE WHEN o.platform IS NOT NULL
                              THEN CONCAT('Delivery Order: ', o.platform)
@@ -534,6 +489,7 @@ exports.getPayments = async (req, res) => {
                     p.confirmed_at,
                     p.confirmed_by,
                     p.customer_name,
+                    NULL AS items_summary,
                     p.mpesa_result_message,
                     NULL AS total_amount,
                     NULL AS order_customer_name,

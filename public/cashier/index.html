@@ -73,14 +73,12 @@
                     <input type="datetime-local" id="scheduledForInput" class="form-control">
                 </div>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="paymentMethodSection">
                 <label>Payment Method</label>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                    <button type="button" class="btn" id="mpesaStkTab" style="flex:1; min-width: 7rem; background: var(--accent-success);" onclick="setPaymentMethod('mpesa_stk')">M-Pesa STK</button>
-                    <button type="button" class="btn" id="mpesaOfflineTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('mpesa_offline')">M-Pesa offline</button>
+                    <button type="button" class="btn" id="mpesaOfflineTab" style="flex:1; min-width: 7rem; background: var(--accent-success);" onclick="setPaymentMethod('mpesa_offline')">M-Pesa offline</button>
                     <button type="button" class="btn" id="cashTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('cash')">Cash</button>
                     <button type="button" class="btn" id="platformTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('platform')">Platform (Uber/Bolt)</button>
-                    <button type="button" class="btn" id="splitTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('split')">Split Pay</button>
                 </div>
             </div>
             <div id="platformFields" style="display:none;">
@@ -100,38 +98,15 @@
                 </div>
                 <p class="card-small" style="color: var(--accent-warning); margin-bottom: 1rem;"><i class="fas fa-info-circle"></i> Payments for these orders are settled weekly by the platform.</p>
             </div>
-            <div id="mpesaStkFields">
-                <div class="form-group">
-                    <label>Customer Phone (M-Pesa)</label>
-                    <input type="text" id="custPhone" class="form-control" placeholder="2547XXXXXXXX" value="2547">
-                </div>
-            </div>
-            <div id="splitFields" style="display:none;">
-                <div class="form-group">
-                    <label>M-Pesa STK Amount</label>
-                    <input type="number" id="splitMpesaAmount" class="form-control" placeholder="Amount for STK" oninput="calculateSplitFromSTK()">
-                </div>
-                <div class="form-group">
-                    <label>M-Pesa Phone</label>
-                    <input type="text" id="splitMpesaPhone" class="form-control" value="2547">
-                </div>
-                <div class="form-group">
-                    <label>M-Pesa Offline Amount</label>
-                    <input type="number" id="splitOfflineAmount" class="form-control" placeholder="Amount for Offline" oninput="calculateSplitFromOffline()">
-                </div>
-                <div class="form-group">
-                    <label>Cash Amount</label>
-                    <input type="number" id="splitCashAmount" class="form-control" placeholder="Amount for Cash" oninput="calculateSplitFromCash()">
-                </div>
-            </div>
             <div id="mpesaOfflineFields" style="display:none;">
-                <p class="card-small" style="color: rgba(255,255,255,0.9); margin-bottom: 1rem;">Customer pays your Pay Bill or Till in their M-Pesa menu (no pop-up on their phone). After you tap Complete, pick the matching unlinked M-Pesa message or enter the receipt in the next step.</p>
+                <p class="card-small" style="color: rgba(255,255,255,0.9); margin-bottom: 1rem;">Customer pays your Pay Bill or Till in their M-Pesa menu. After you tap Complete, enter the receipt code from the customer&apos;s M-Pesa SMS.</p>
             </div>
             <div id="cashFields" style="display:none;">
                 <p style="color: var(--accent-success); margin-bottom: 1rem;"><i class="fas fa-check-circle"></i> Cash sales are recorded immediately.</p>
             </div>
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button class="btn" style="background: #64748b; color: white; font-weight: 700;" onclick="document.getElementById('checkoutModal').style.display='none'">Cancel</button>
+                <button class="btn" id="savePendingOrderBtn" type="button" style="background: #f5b942; color: #273746; font-weight: 700;" onclick="createPendingOrderAndOpenPayments()">Save &amp; View Pending</button>
                 <button class="btn btn-primary" id="processPaymentBtn">Complete Payment</button>
             </div>
         </div>
@@ -142,14 +117,8 @@
         <div class="glass-card" style="max-width:560px; width:100%; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
             <h2 style="color:#fff; margin-bottom:0.5rem; font-size:1.15rem;">Record offline M-Pesa</h2>
             <p id="incomingMpesaOrderHint" class="card-small" style="color:rgba(255,255,255,0.88); margin-bottom:1rem;"></p>
-            <p class="card-small" style="color:rgba(255,255,255,0.85); margin-bottom:0.75rem;">Pick the payment that matches this new order. Rows stay until the server confirms the link.</p>
-            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
-                <button type="button" class="btn" style="background:#334155; color:#fff;" onclick="refreshIncomingList()"><i class="fas fa-sync-alt"></i> Refresh list</button>
-                <button type="button" class="btn" style="background:#475569; color:#fff;" onclick="toggleIncomingManual()">Enter receipt manually</button>
-            </div>
-            <div id="incomingMpesaList" style="margin-bottom:1rem; min-height:3rem;"></div>
-            <div id="incomingManualWrap" style="display:none; border-top:1px solid rgba(255,255,255,0.12); padding-top:1rem; margin-bottom:1rem;">
-                <p class="card-small" style="color:rgba(255,255,255,0.88); margin-bottom:0.75rem;">If the payment is not listed, enter the confirmation code from the customer&apos;s SMS.</p>
+            <p class="card-small" style="color:rgba(255,255,255,0.85); margin-bottom:0.75rem;">Enter the confirmation code from the customer&apos;s M-Pesa SMS to complete this payment.</p>
+            <div id="incomingManualWrap" style="border-top:1px solid rgba(255,255,255,0.12); padding-top:1rem; margin-bottom:1rem;">
                 <div class="form-group">
                     <label style="color:#fff;">M-Pesa confirmation code</label>
                     <input type="text" id="incomingManualReceipt" class="form-control" placeholder="e.g. QGH1ABCD23" autocomplete="off">
@@ -158,12 +127,11 @@
                     <label style="color:#fff;">Payer phone (optional)</label>
                     <input type="text" id="incomingManualPhone" class="form-control" placeholder="2547XXXXXXXX">
                 </div>
-                <button type="button" class="btn btn-primary" onclick="submitIncomingManual()">Record with receipt code</button>
+                <button type="button" class="btn btn-primary" onclick="submitIncomingManual()">Record receipt &amp; complete order</button>
             </div>
             <p id="incomingMpesaError" style="color:var(--accent-danger); margin-bottom:0.75rem; font-size:0.9rem;"></p>
             <div style="display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:flex-end;">
                 <button type="button" class="btn" style="background:#64748b; color:#fff;" onclick="closeIncomingMpesaModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" id="incomingApplyBtn" disabled onclick="confirmApplyIncoming()">Link selected &amp; complete order</button>
             </div>
         </div>
     </div>
@@ -258,6 +226,7 @@
             const isChecked = document.getElementById('isScheduledCheckbox').checked;
             document.getElementById('scheduledFields').style.display = isChecked ? 'block' : 'none';
             if (isChecked) {
+                setPaymentMethod('scheduled');
                 const now = new Date();
                 now.setHours(now.getHours() + 1);
                 const yyyy = now.getFullYear();
@@ -266,6 +235,9 @@
                 const hh = String(now.getHours()).padStart(2, '0');
                 const mm = String(now.getMinutes()).padStart(2, '0');
                 document.getElementById('scheduledForInput').value = `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+            } else {
+                document.getElementById('paymentMethodSection').style.display = 'block';
+                setPaymentMethod('mpesa_offline');
             }
         }
 
@@ -420,39 +392,34 @@
         }
 
         document.getElementById('checkoutBtn').onclick = () => {
-            setPaymentMethod('mpesa_stk');
+            setPaymentMethod('mpesa_offline');
             document.getElementById('checkoutModal').style.display = 'flex';
         };
 
-        let currentMethod = 'mpesa_stk';
+        let currentMethod = 'mpesa_offline';
 
         function setPaymentMethod(method) {
             currentMethod = method;
-            const stkTab = document.getElementById('mpesaStkTab');
             const offTab = document.getElementById('mpesaOfflineTab');
             const cashTab = document.getElementById('cashTab');
-            const splitTab = document.getElementById('splitTab');
             const platformTab = document.getElementById('platformTab');
             
-            const stkFields = document.getElementById('mpesaStkFields');
             const offFields = document.getElementById('mpesaOfflineFields');
             const cashFields = document.getElementById('cashFields');
-            const splitFields = document.getElementById('splitFields');
             const platformFields = document.getElementById('platformFields');
             
             const btn = document.getElementById('processPaymentBtn');
 
-            [stkTab, offTab, cashTab, splitTab, platformTab].forEach(t => t.style.background = 'var(--card-bg)');
-            [stkFields, offFields, cashFields, splitFields, platformFields].forEach(f => f.style.display = 'none');
+            [offTab, cashTab, platformTab].forEach(t => t.style.background = 'var(--card-bg)');
+            [offFields, cashFields, platformFields].forEach(f => f.style.display = 'none');
 
-            if (method === 'mpesa_stk') {
-                stkTab.style.background = 'var(--accent-success)';
-                stkFields.style.display = 'block';
-                btn.textContent = 'Push STK';
+            if (method === 'scheduled') {
+                document.getElementById('paymentMethodSection').style.display = 'none';
+                btn.textContent = 'Record Scheduled Order';
             } else if (method === 'mpesa_offline') {
                 offTab.style.background = 'var(--accent-success)';
                 offFields.style.display = 'block';
-                btn.textContent = 'Record offline M-Pesa & complete';
+                btn.textContent = 'Continue to receipt entry';
             } else if (method === 'cash') {
                 cashTab.style.background = 'var(--accent-success)';
                 cashFields.style.display = 'block';
@@ -461,38 +428,7 @@
                 platformTab.style.background = 'var(--accent-success)';
                 platformFields.style.display = 'block';
                 btn.textContent = 'Record Delivery Order';
-            } else if (method === 'split') {
-                splitTab.style.background = 'var(--accent-success)';
-                splitFields.style.display = 'block';
-                btn.textContent = 'Initiate Split Payment';
-                
-                // Initialize split values
-                const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
-                document.getElementById('splitMpesaAmount').value = total;
-                document.getElementById('splitOfflineAmount').value = 0;
-                document.getElementById('splitCashAmount').value = 0;
             }
-        }
-
-        function calculateSplitFromSTK() {
-            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
-            const stk = Number(document.getElementById('splitMpesaAmount').value) || 0;
-            const off = Number(document.getElementById('splitOfflineAmount').value) || 0;
-            document.getElementById('splitCashAmount').value = Math.max(0, total - stk - off);
-        }
-
-        function calculateSplitFromOffline() {
-            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
-            const stk = Number(document.getElementById('splitMpesaAmount').value) || 0;
-            const off = Number(document.getElementById('splitOfflineAmount').value) || 0;
-            document.getElementById('splitCashAmount').value = Math.max(0, total - stk - off);
-        }
-
-        function calculateSplitFromCash() {
-            const total = cart.reduce((acc, item) => acc + (item.selling_price * item.quantity), 0);
-            const cash = Number(document.getElementById('splitCashAmount').value) || 0;
-            const off = Number(document.getElementById('splitOfflineAmount').value) || 0;
-            document.getElementById('splitMpesaAmount').value = Math.max(0, total - cash - off);
         }
 
         let __incomingModalOpen = false;
@@ -500,16 +436,14 @@
         let __incomingOrderId = null;
         let __incomingOrderTotal = null;
         let __incomingCustomerName = '';
-        let __incomingSelectedId = null;
-        let __incomingList = [];
-
-        document.getElementById('incomingMpesaModal').addEventListener('click', (e) => {
-            if (e.target.id === 'incomingMpesaModal') closeIncomingMpesaModal();
-        });
 
 
         function closePostCheckoutModal() {
             document.getElementById('postCheckoutModal').style.display = 'none';
+            document.getElementById('isScheduledCheckbox').checked = false;
+            document.getElementById('scheduledFields').style.display = 'none';
+            document.getElementById('paymentMethodSection').style.display = 'block';
+            setPaymentMethod('mpesa_offline');
             cart = [];
             renderCart();
             loadMenu();
@@ -563,14 +497,10 @@
             __incomingOrderId = null;
             __incomingOrderTotal = null;
             __incomingCustomerName = '';
-            __incomingSelectedId = null;
-            __incomingList = [];
             document.getElementById('incomingMpesaModal').style.display = 'none';
             document.getElementById('incomingManualReceipt').value = '';
             document.getElementById('incomingManualPhone').value = '';
-            document.getElementById('incomingManualWrap').style.display = 'none';
             document.getElementById('incomingMpesaError').textContent = '';
-            document.getElementById('incomingApplyBtn').disabled = true;
         }
 
         function openIncomingMpesaModal(orderId, orderTotal, customerName, opts = {}) {
@@ -579,16 +509,12 @@
             __incomingOrderId = Number(orderId);
             __incomingOrderTotal = Number(orderTotal);
             __incomingCustomerName = customerName != null ? String(customerName).trim() : '';
-            __incomingSelectedId = null;
             document.getElementById('incomingMpesaError').textContent = '';
-            document.getElementById('incomingManualWrap').style.display = 'none';
             document.getElementById('incomingManualReceipt').value = '';
             document.getElementById('incomingManualPhone').value = '';
             document.getElementById('incomingMpesaOrderHint').textContent = `Order #${__incomingOrderId} · expected total ${formatCurrency(__incomingOrderTotal)}`;
-            document.getElementById('incomingApplyBtn').disabled = true;
             document.getElementById('checkoutModal').style.display = 'none';
             document.getElementById('incomingMpesaModal').style.display = 'flex';
-            refreshIncomingList();
         }
 
         function finishCheckoutAfterIncoming() {
@@ -597,81 +523,6 @@
             closeIncomingMpesaModal({ success: true });
             loadMenu();
             alert('Order completed.');
-        }
-
-        function toggleIncomingManual() {
-            const w = document.getElementById('incomingManualWrap');
-            w.style.display = w.style.display === 'none' ? 'block' : 'none';
-        }
-
-        function renderIncomingList() {
-            const listEl = document.getElementById('incomingMpesaList');
-            function esc(s) {
-                const d = document.createElement('div');
-                d.textContent = s == null ? '' : String(s);
-                return d.innerHTML;
-            }
-            if (!__incomingList.length) {
-                listEl.innerHTML =
-                    '<p class="card-small" style="color:rgba(255,255,255,0.8);">No unlinked M-Pesa messages yet. Use Refresh after a callback, or enter the receipt manually below.</p>';
-                return;
-            }
-            listEl.innerHTML = __incomingList
-                .map((p) => {
-                    const t = p.confirmed_at || p.created_at;
-                    const timeStr = t ? new Date(t).toLocaleString() : '—';
-                    const msg = p.mpesa_result_message ? String(p.mpesa_result_message) : '';
-                    const msgShort = msg.length > 100 ? msg.slice(0, 100) + '…' : msg;
-                    const sel = Number(p.id) === __incomingSelectedId ? ' incoming-row--sel' : '';
-                    return `<div class="incoming-row${sel}" role="button" tabindex="0" data-incoming-id="${p.id}" onclick="selectIncomingRow(${p.id})">
-                        <div style="display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap;">
-                            <strong style="color:#fff;">${formatCurrency(p.amount)}</strong>
-                            <span style="color:rgba(255,255,255,0.75); font-size:0.85rem;">${esc(timeStr)}</span>
-                        </div>
-                        <div style="color:rgba(255,255,255,0.9); font-size:0.9rem; margin-top:0.35rem;">${esc(p.customer_name || '—')} · receipt: <strong>${esc(p.transaction_id || '—')}</strong></div>
-                        <div style="color:rgba(255,255,255,0.75); font-size:0.82rem; margin-top:0.35rem; word-break:break-word;">${esc(msgShort)}</div>
-                        <div style="margin-top:0.35rem;"><span class="badge" style="background:var(--accent-success);">${esc(p.payment_method || 'M-Pesa')}</span> <span class="badge" style="background:var(--accent-warning);">${esc(p.status)}</span></div>
-                    </div>`;
-                })
-                .join('');
-        }
-
-        function selectIncomingRow(id) {
-            __incomingSelectedId = Number(id);
-            document.getElementById('incomingApplyBtn').disabled = !__incomingSelectedId;
-            document.getElementById('incomingMpesaError').textContent = '';
-            renderIncomingList();
-        }
-
-        async function refreshIncomingList() {
-            const listEl = document.getElementById('incomingMpesaList');
-            document.getElementById('incomingMpesaError').textContent = '';
-            listEl.innerHTML = '<p class="card-small" style="color:rgba(255,255,255,0.85);">Loading…</p>';
-            try {
-                const r = await apiFetch('/payments/unlinked-incoming');
-                __incomingList = r.data || [];
-                renderIncomingList();
-            } catch (err) {
-                listEl.innerHTML = '';
-                document.getElementById('incomingMpesaError').textContent = err.message || 'Failed to load list';
-            }
-        }
-
-        async function confirmApplyIncoming() {
-            if (!__incomingSelectedId || !__incomingOrderId) return;
-            document.getElementById('incomingMpesaError').textContent = '';
-            const btn = document.getElementById('incomingApplyBtn');
-            btn.disabled = true;
-            try {
-                await apiFetch('/payments/apply-incoming-to-order', {
-                    method: 'POST',
-                    body: JSON.stringify({ paymentId: __incomingSelectedId, orderId: __incomingOrderId }),
-                });
-                finishCheckoutAfterIncoming();
-            } catch (err) {
-                document.getElementById('incomingMpesaError').textContent = err.message || 'Apply failed';
-                btn.disabled = !__incomingSelectedId;
-            }
         }
 
         async function submitIncomingManual() {
@@ -696,6 +547,48 @@
                 finishCheckoutAfterIncoming();
             } catch (err) {
                 document.getElementById('incomingMpesaError').textContent = err.message || 'Recording failed';
+            }
+        }
+
+        async function createPendingOrderAndOpenPayments() {
+            const btn = document.getElementById('savePendingOrderBtn');
+            const customerName = document.getElementById('custName').value.trim();
+            const platformSelection = document.getElementById('orderPlatform')?.value || 'none';
+            const platform = currentMethod === 'platform' ? platformSelection : 'none';
+            const platform_order_id = currentMethod === 'platform' ? document.getElementById('platformOrderId').value : null;
+            const total = cart.reduce((acc, item) => {
+                let price = Number(item.selling_price);
+                if (platformSelection === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
+                if (platformSelection === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
+                if (platformSelection === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+                if (platformSelection === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
+                return acc + (price * item.quantity);
+            }, 0);
+            const isScheduled = document.getElementById('isScheduledCheckbox').checked;
+            const scheduled_for = isScheduled ? document.getElementById('scheduledForInput').value : null;
+
+            if (isScheduled && (!scheduled_for || new Date(scheduled_for) <= new Date())) {
+                alert('Please select a future scheduled date and time.');
+                return;
+            }
+
+            btn.disabled = true;
+            try {
+                const orderResp = await apiFetch('/orders', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        items: cart,
+                        total_amount: total,
+                        customer_name: customerName,
+                        platform: platform !== 'none' ? platform : null,
+                        platform_order_id,
+                        scheduled_for,
+                    }),
+                });
+                window.location.href = `orders.html?pendingOrder=${encodeURIComponent(orderResp.orderId)}`;
+            } catch (err) {
+                alert(err.message || 'Could not save the pending order.');
+                btn.disabled = false;
             }
         }
 
@@ -740,15 +633,7 @@
                     })
                 });
 
-                if (currentMethod === 'mpesa_stk') {
-                    const phone = document.getElementById('custPhone').value;
-
-                    await apiFetch('/payments/stk-push', {
-                        method: 'POST',
-                        body: JSON.stringify({ orderId: orderResp.orderId, phoneNumber: phone, amount: total, customer_name: customerName })
-                    });
-                    showPostCheckoutModal(orderResp.orderId);
-                } else if (currentMethod === 'mpesa_offline') {
+                if (currentMethod === 'mpesa_offline') {
                     openIncomingMpesaModal(orderResp.orderId, total, customerName, { fromCheckout: true });
                 } else if (currentMethod === 'cash') {
                     await apiFetch('/payments/cash', {
@@ -759,32 +644,7 @@
                 } else if (currentMethod === 'platform') {
                     // Payment for platform orders is handled externally/weekly
                     showPostCheckoutModal(orderResp.orderId);
-                } else if (currentMethod === 'split') {
-                    const mpesaAmt = Number(document.getElementById('splitMpesaAmount').value) || 0;
-                    const offlineAmt = Number(document.getElementById('splitOfflineAmount').value) || 0;
-                    const cashAmt = Number(document.getElementById('splitCashAmount').value) || 0;
-                    const phone = document.getElementById('splitMpesaPhone').value;
-                    
-                    if (mpesaAmt > 0) {
-                        await apiFetch('/payments/stk-push', {
-                            method: 'POST',
-                            body: JSON.stringify({ orderId: orderResp.orderId, phoneNumber: phone, amount: mpesaAmt, customer_name: customerName })
-                        });
-                    }
-                    if (offlineAmt > 0) {
-                        // Create a pending record for offline that cashier can link later
-                        await apiFetch('/payments/stk-push', { // Using same endpoint logic but with null phone to just log it? No, better use a dummy checkout id or specific endpoint
-                             method: 'POST',
-                             body: JSON.stringify({ orderId: orderResp.orderId, amount: offlineAmt, customer_name: customerName, skipSTK: true }) 
-                        });
-                    }
-                    if (cashAmt > 0) {
-                        await apiFetch('/payments/cash', {
-                            method: 'POST',
-                            body: JSON.stringify({ orderId: orderResp.orderId, amount: cashAmt })
-                        });
-                    }
-                    alert(`Split payment completed.\n- STK: KES ${mpesaAmt}\n- Offline M-Pesa: KES ${offlineAmt}\n- Cash: KES ${cashAmt}`);
+                } else if (currentMethod === 'scheduled') {
                     showPostCheckoutModal(orderResp.orderId);
                 }
             } catch (err) {
@@ -823,7 +683,7 @@
             checkBadges();
         });
 
-        setPaymentMethod('mpesa_stk');
+        setPaymentMethod('mpesa_offline');
         loadMenu();
         checkBadges();
         setInterval(checkBadges, 10000);

@@ -208,8 +208,8 @@
                                     <i class="fas fa-paper-plane"></i> Release
                                 </button>
                                 ${user.role === 'admin' ? 
-                                    `<button class="btn btn-danger" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-danger);" onclick="cancelOrder(${order.id})">
-                                        <i class="fas fa-trash"></i> Cancel
+                                    `<button class="btn btn-danger" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-danger);" onclick="deleteOrder(${order.id})">
+                                        <i class="fas fa-trash"></i> Delete
                                      </button>` : ''
                                 }
                             </div>
@@ -244,18 +244,15 @@
             }
         }
 
-        async function cancelOrder(id) {
-            if (!confirm(`Are you sure you want to cancel scheduled order #${id}?`)) return;
+        async function deleteOrder(id) {
+            if (!confirm(`Are you sure you want to permanently delete scheduled order #${id}?`)) return;
             try {
-                await apiFetch(`/orders/${id}/status`, {
-                    method: 'PUT',
-                    body: JSON.stringify({ status: 'cancelled', payment_status: 'pending' })
-                });
-                alert('Order cancelled successfully.');
+                await apiFetch(`/orders/${id}/scheduled`, { method: 'DELETE' });
+                alert('Scheduled order deleted successfully.');
                 loadScheduledOrders();
                 checkBadges();
             } catch (err) {
-                alert('Cancellation failed: ' + err.message);
+                alert('Deletion failed: ' + err.message);
             }
         }
 

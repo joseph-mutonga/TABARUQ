@@ -36,6 +36,11 @@ const db = require('../config/db');
 
 // 1. Order Receiving via Webhook
 exports.handleWebhookOrder = async (req, res) => {
+    const configuredSecret = process.env.DELIVERY_WEBHOOK_SECRET;
+    if (!configuredSecret || req.get('x-delivery-webhook-secret') !== configuredSecret) {
+        return res.status(401).json({ success: false, message: 'Invalid delivery webhook credentials' });
+    }
+
     // Standardize incoming data (Deliverect / Platform format)
     const { 
         platform, 
@@ -47,6 +52,25 @@ exports.handleWebhookOrder = async (req, res) => {
         status = 'pending',
         fees = [] // Expecting [{type: 'commission', percentage: 25, amount: 100}]
     } = req.body;
+
+    const allowedPlatforms = ['Uber Eats', 'Glovo', 'Bolt Food', 'Tabaruq Delivery'];
+    const allowedStatuses = ['pending', 'accepted', 'ready', 'rejected', 'collected', 'cancelled'];
+    if (!allowedPlatforms.includes(platform) || !order_id || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Invalid delivery order payload' });
+    }
+    if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ success: false, message: 'Invalid delivery order status' });
+    }
+    const totalAmount = Number(total);
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+        return res.status(400).json({ success: false, message: 'Delivery order total must be greater than zero' });
+    }
+    for (const item of items) {
+        if (!item.name || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 ||
+            !Number.isFinite(Number(item.price)) || Number(item.price) < 0) {
+            return res.status(400).json({ success: false, message: 'Invalid delivery order item' });
+        }
+    }
 
     const connection = await db.getConnection();
     try {
@@ -66,7 +90,7 @@ exports.handleWebhookOrder = async (req, res) => {
         // Save order
         const [orderResult] = await connection.execute(
             'INSERT INTO orders (platform, platform_order_id, total_amount, status, customer_name) VALUES (?, ?, ?, ?, ?)',
-            [platform, order_id, total, status, customer_name || 'Delivery Customer']
+            [platform, order_id, totalAmount, status, customer_name || 'Delivery Customer']
         );
         const internalOrderId = orderResult.insertId;
 
@@ -83,7 +107,7 @@ exports.handleWebhookOrder = async (req, res) => {
             for (const fee of fees) {
                 await connection.execute(
                     'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
-                    [internalOrderId, fee.percentage, fee.amount]
+                    [internalOrderId, Number(fee.percentage) || 0, Number(fee.amount) || 0]
                 );
             }
         } else {
@@ -94,7 +118,7 @@ exports.handleWebhookOrder = async (req, res) => {
             );
             const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
             if (commissionPct > 0) {
-                const feeAmount = Number(total) * (commissionPct / 100);
+                const feeAmount = totalAmount * (commissionPct / 100);
                 await connection.execute(
                     'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
                     [internalOrderId, commissionPct, feeAmount]
@@ -134,6 +158,10 @@ exports.updateDeliveryStatus = async (req, res) => {
     const { status, reason } = req.body; // status: accepted, ready, rejected, collected
 
     try {
+        const validStatuses = ['pending', 'accepted', 'ready', 'rejected', 'collected', 'cancelled'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid delivery status' });
+        }
         const [order] = await db.execute('SELECT * FROM orders WHERE id = ?', [id]);
         if (order.length === 0) return res.status(404).json({ success: false, message: 'Order not found' });
 

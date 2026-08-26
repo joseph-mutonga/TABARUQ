@@ -41,10 +41,11 @@ function startScheduledOrderReleaseJob(io) {
 
             for (const order of rows) {
                 // Update order to released
-                await db.execute(
-                    'UPDATE orders SET scheduled_released = 1, scheduled_for = CURRENT_TIMESTAMP WHERE id = ?',
+                const [releaseResult] = await db.execute(
+                    'UPDATE orders SET scheduled_released = 1, scheduled_for = CURRENT_TIMESTAMP WHERE id = ? AND scheduled_released = 0 AND status != "cancelled" AND status != "merged"',
                     [order.id]
                 );
+                if (releaseResult.affectedRows !== 1) continue;
 
                 // Fetch items to emit to kitchen if platform is set
                 const [items] = await db.execute(`

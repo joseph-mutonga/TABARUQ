@@ -4,7 +4,6 @@ const paymentController = require('../controllers/paymentController');
 const { verifyToken, isCashier, isAdmin } = require('../middleware/auth');
 
 // Named routes MUST come before wildcard /:id routes
-router.post('/stk-push', verifyToken, isCashier, paymentController.initiateSTKPush);
 router.post('/offline-mpesa', verifyToken, isCashier, paymentController.recordOfflineMpesa);
 router.post('/cash', verifyToken, isCashier, paymentController.processCashPayment);
 router.get('/unlinked-incoming', verifyToken, isCashier, paymentController.getUnlinkedIncoming);

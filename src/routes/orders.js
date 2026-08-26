@@ -7,6 +7,7 @@ router.post('/', verifyToken, isCashier, orderController.createOrder);
 router.get('/', verifyToken, isCashier, orderController.getOrders);
 router.get('/scheduled', verifyToken, isCashier, orderController.getScheduledOrders);
 router.post('/:id/release', verifyToken, isCashier, orderController.releaseScheduledOrder);
+router.delete('/:id/scheduled', verifyToken, isAdmin, orderController.deleteScheduledOrder);
 router.get('/:id', verifyToken, isCashier, orderController.getOrderDetails);
 router.put('/:id/status', verifyToken, isCashier, orderController.updateOrderStatus);
 

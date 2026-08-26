@@ -41,6 +41,7 @@ A complete premium Hotel Management System built with Node.js, Express, MySQL, a
    - `MPESA_SHORTCODE` (Lipa Na M-Pesa Online Shortcode)
    - `MPESA_PASSKEY`
    - `MPESA_CALLBACK_URL` (Use a service like Ngrok for local testing)
+   - `DELIVERY_WEBHOOK_SECRET` (Required secret sent as the `x-delivery-webhook-secret` header by delivery integrations)
 
 ### 5. Installation
 ```bash

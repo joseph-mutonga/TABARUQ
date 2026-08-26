@@ -7,6 +7,48 @@ exports.createOrder = async (req, res) => {
     try {
         await connection.beginTransaction();
 
+        if (!Array.isArray(items) || items.length === 0) {
+            throw new Error('An order must contain at least one item');
+        }
+
+        const itemIds = [...new Set(items.map((item) => Number(item.id)))];
+        if (itemIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+            throw new Error('Order contains an invalid inventory item');
+        }
+
+        const [inventoryRows] = await connection.query(
+            `SELECT id, name, selling_price, uber_price, glovo_price, bolt_price, own_delivery_price
+             FROM inventory WHERE id IN (?)`,
+            [itemIds]
+        );
+        const inventoryById = new Map(inventoryRows.map((row) => [row.id, row]));
+        if (inventoryRows.length !== itemIds.length) {
+            throw new Error('Order contains an inventory item that no longer exists');
+        }
+
+        let calculatedTotal = 0;
+        for (const item of items) {
+            const quantity = Number(item.quantity);
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+                throw new Error('Order quantities must be greater than zero');
+            }
+
+            const inventoryItem = inventoryById.get(Number(item.id));
+            let price = Number(inventoryItem.selling_price);
+            const platformPrice = {
+                'Uber Eats': inventoryItem.uber_price,
+                Glovo: inventoryItem.glovo_price,
+                'Bolt Food': inventoryItem.bolt_price,
+                'Tabaruq Delivery': inventoryItem.own_delivery_price
+            }[platform];
+            if (platformPrice != null && Number(platformPrice) >= 0) price = Number(platformPrice);
+            calculatedTotal += quantity * price;
+        }
+        const totalAmount = Math.round(calculatedTotal * 100) / 100;
+        if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+            throw new Error('Order total must be greater than zero');
+        }
+
         let nameToSave = customer_name || (platform ? `${platform} Order` : 'Guest');
         if (nameToSave && nameToSave.length > 255) {
             nameToSave = nameToSave.substring(0, 252) + '...';
@@ -26,7 +68,7 @@ exports.createOrder = async (req, res) => {
 
         const [orderResult] = await connection.execute(
             'INSERT INTO orders (cashier_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [req.user.id, Number(total_amount) || 0, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
+            [req.user.id, totalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
         );
         const orderId = orderResult.insertId;
 
@@ -38,7 +80,7 @@ exports.createOrder = async (req, res) => {
             );
             const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
             if (commissionPct > 0) {
-                const feeAmount = (Number(total_amount) || 0) * (commissionPct / 100);
+                const feeAmount = totalAmount * (commissionPct / 100);
                 await connection.execute(
                     'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
                     [orderId, commissionPct, feeAmount]
@@ -49,11 +91,15 @@ exports.createOrder = async (req, res) => {
         // Consolidate items with the same item_id into a single line (important for merged orders)
         const consolidatedMap = new Map();
         for (const item of items) {
-            let itemPrice = Number(item.selling_price) || Number(item.price) || 0;
-            if (platform === 'Uber Eats' && item.uber_price) itemPrice = Number(item.uber_price);
-            if (platform === 'Glovo' && item.glovo_price) itemPrice = Number(item.glovo_price);
-            if (platform === 'Bolt Food' && item.bolt_price) itemPrice = Number(item.bolt_price);
-            if (platform === 'Tabaruq Delivery' && item.own_delivery_price) itemPrice = Number(item.own_delivery_price);
+            const inventoryItem = inventoryById.get(Number(item.id));
+            let itemPrice = Number(inventoryItem.selling_price);
+            const platformPrice = {
+                'Uber Eats': inventoryItem.uber_price,
+                Glovo: inventoryItem.glovo_price,
+                'Bolt Food': inventoryItem.bolt_price,
+                'Tabaruq Delivery': inventoryItem.own_delivery_price
+            }[platform];
+            if (platformPrice != null && Number(platformPrice) >= 0) itemPrice = Number(platformPrice);
 
             const key = `${item.id}_${itemPrice}`; // group by item + price
             const qty = Number(item.quantity) || 0;
@@ -80,10 +126,13 @@ exports.createOrder = async (req, res) => {
 
             if (!isMerge) {
                 // 2. Deduct the sold item's own stock
-                await connection.execute(
-                    'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
-                    [item.quantity, item.id]
+                const [stockUpdate] = await connection.execute(
+                    'UPDATE inventory SET quantity = quantity - ? WHERE id = ? AND quantity >= ?',
+                    [item.quantity, item.id, item.quantity]
                 );
+                if (stockUpdate.affectedRows !== 1) {
+                    throw new Error(`Insufficient stock for item #${item.id}`);
+                }
 
                 // 3. Log direct stock change
                 await connection.execute(
@@ -99,10 +148,13 @@ exports.createOrder = async (req, res) => {
                 );
                 for (const rule of deductionRules) {
                     const totalDeduct = parseFloat(rule.deduct_qty) * item.quantity;
-                    await connection.execute(
-                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
-                        [totalDeduct, rule.stock_item_id]
+                    const [stockUpdate] = await connection.execute(
+                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ? AND quantity >= ?',
+                        [totalDeduct, rule.stock_item_id, totalDeduct]
                     );
+                    if (stockUpdate.affectedRows !== 1) {
+                        throw new Error(`Insufficient stock for deduction item #${rule.stock_item_id}`);
+                    }
                     await connection.execute(
                         'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
                         [rule.stock_item_id, req.user.id, -totalDeduct, `Auto-deduct (rule) - Order #${orderId} via item #${item.id}`]
@@ -117,10 +169,13 @@ exports.createOrder = async (req, res) => {
                 );
                 for (const comp of recipeComponents) {
                     const totalDeduct = parseFloat(comp.component_qty) * item.quantity;
-                    await connection.execute(
-                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
-                        [totalDeduct, comp.component_item_id]
+                    const [stockUpdate] = await connection.execute(
+                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ? AND quantity >= ?',
+                        [totalDeduct, comp.component_item_id, totalDeduct]
                     );
+                    if (stockUpdate.affectedRows !== 1) {
+                        throw new Error(`Insufficient stock for recipe item #${comp.component_item_id}`);
+                    }
                     await connection.execute(
                         'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
                         [comp.component_item_id, req.user.id, -totalDeduct, `Combo deduct - Order #${orderId} via ${item.name || 'item #' + item.id}`]
@@ -166,7 +221,7 @@ exports.createOrder = async (req, res) => {
                     platform_order_id: platform_order_id || `#${orderId}`,
                     customer_name: nameToSave,
                     items: formattedItems,
-                    total: Number(total_amount),
+                    total: totalAmount,
                     status: 'pending'
                 });
             }
@@ -240,6 +295,10 @@ exports.updateOrderStatus = async (req, res) => {
     const { id } = req.params;
     const { status, payment_status } = req.body;
     try {
+        const validStatuses = ['pending', 'completed', 'cancelled', 'merged'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid order status' });
+        }
         if (status === 'cancelled' && req.user.role !== 'admin') {
             return res.status(403).json({ success: false, message: 'Only administrators can cancel orders' });
         }
@@ -303,10 +362,14 @@ exports.releaseScheduledOrder = async (req, res) => {
         const order = orderRows[0];
 
         // Update order status to released
-        await connection.execute(
-            'UPDATE orders SET scheduled_released = 1, scheduled_for = CURRENT_TIMESTAMP WHERE id = ?',
+        const [releaseResult] = await connection.execute(
+            'UPDATE orders SET scheduled_released = 1, scheduled_for = CURRENT_TIMESTAMP WHERE id = ? AND scheduled_released = 0 AND scheduled_for > NOW()',
             [id]
         );
+        if (releaseResult.affectedRows !== 1) {
+            await connection.rollback();
+            return res.status(409).json({ success: false, message: 'Order is already released or is not scheduled' });
+        }
 
         // Fetch order items to emit
         const [items] = await connection.execute(`
@@ -346,6 +409,38 @@ exports.releaseScheduledOrder = async (req, res) => {
     } catch (err) {
         await connection.rollback();
         console.error('ERROR IN RELEASE_SCHEDULED_ORDER:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    } finally {
+        connection.release();
+    }
+};
+
+exports.deleteScheduledOrder = async (req, res) => {
+    const { id } = req.params;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [orders] = await connection.execute(
+            'SELECT id FROM orders WHERE id = ? AND scheduled_for IS NOT NULL AND scheduled_released = 0 AND status != "cancelled" FOR UPDATE',
+            [id]
+        );
+        if (orders.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Scheduled order not found or already released' });
+        }
+
+        await connection.execute('DELETE FROM payments WHERE order_id = ?', [id]);
+        await connection.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
+        await connection.execute('DELETE FROM orders WHERE id = ?', [id]);
+        await connection.commit();
+
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'deleted', orderId: Number(id) });
+        res.json({ success: true, message: 'Scheduled order deleted successfully' });
+    } catch (err) {
+        await connection.rollback();
+        console.error('ERROR IN DELETE_SCHEDULED_ORDER:', err);
         res.status(500).json({ success: false, message: 'Server error: ' + err.message });
     } finally {
         connection.release();
