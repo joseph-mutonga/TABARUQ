@@ -94,7 +94,7 @@
 
                 <div id="paymentDetailActions" style="margin-top:1.25rem; display:flex; flex-wrap:wrap; gap:0.5rem; position: relative; z-index: 1;"></div>
                 <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
-                    <button class="btn" style="width: 100%; background: #1e293b;" onclick="printOrder()"><i class="fas fa-print"></i> Print Receipt / Bill</button>
+                    <button type="button" class="btn print-action" style="width: 100%;" onclick="printOrder()"><i class="fas fa-print"></i> Print Receipt / Bill</button>
                 </div>
             </div>
             <div class="premium-modal-footer">
@@ -443,7 +443,7 @@
                                     
                                     // Print Bill / Receipt (Available for all linked orders)
                                     if (p.order_id) {
-                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #6366f1; color: #fff; display: inline-flex; align-items: center; gap: 0.3rem;" onclick="event.stopPropagation(); printOrderDirect(${p.order_id})" title="Print Bill/Receipt"><i class="fas fa-print"></i> Print</button>`;
+                                        html += `<button type="button" class="btn print-action" onclick="event.stopPropagation(); printOrderDirect(${p.order_id})" title="Print Bill/Receipt"><i class="fas fa-print"></i> Print</button>`;
                                     }
                                     
                                     if (p.status === 'pending' && p.transaction_id) {

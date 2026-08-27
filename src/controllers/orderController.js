@@ -115,8 +115,10 @@ exports.createOrder = async (req, res) => {
             }
         }
 
+        const stockItemIds = new Set();
         for (const item of consolidatedMap.values()) {
             const subtotal = item.quantity * item.price;
+            stockItemIds.add(Number(item.id));
 
             // 1. Record Order Item (one consolidated row per item)
             await connection.execute(
@@ -127,8 +129,8 @@ exports.createOrder = async (req, res) => {
             if (!isMerge) {
                 // 2. Deduct the sold item's own stock
                 const [stockUpdate] = await connection.execute(
-                    'UPDATE inventory SET quantity = quantity - ? WHERE id = ? AND quantity >= ?',
-                    [item.quantity, item.id, item.quantity]
+                    'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
+                    [item.quantity, item.id]
                 );
                 if (stockUpdate.affectedRows !== 1) {
                     throw new Error(`Insufficient stock for item #${item.id}`);
@@ -147,10 +149,11 @@ exports.createOrder = async (req, res) => {
                     [item.id]
                 );
                 for (const rule of deductionRules) {
+                    stockItemIds.add(Number(rule.stock_item_id));
                     const totalDeduct = parseFloat(rule.deduct_qty) * item.quantity;
                     const [stockUpdate] = await connection.execute(
-                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ? AND quantity >= ?',
-                        [totalDeduct, rule.stock_item_id, totalDeduct]
+                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
+                        [totalDeduct, rule.stock_item_id]
                     );
                     if (stockUpdate.affectedRows !== 1) {
                         throw new Error(`Insufficient stock for deduction item #${rule.stock_item_id}`);
@@ -168,10 +171,11 @@ exports.createOrder = async (req, res) => {
                     [item.id]
                 );
                 for (const comp of recipeComponents) {
+                    stockItemIds.add(Number(comp.component_item_id));
                     const totalDeduct = parseFloat(comp.component_qty) * item.quantity;
                     const [stockUpdate] = await connection.execute(
-                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ? AND quantity >= ?',
-                        [totalDeduct, comp.component_item_id, totalDeduct]
+                        'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
+                        [totalDeduct, comp.component_item_id]
                     );
                     if (stockUpdate.affectedRows !== 1) {
                         throw new Error(`Insufficient stock for recipe item #${comp.component_item_id}`);
@@ -206,7 +210,7 @@ exports.createOrder = async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             io.emit('order_update', { type: 'new', orderId });
-            io.emit('stock_update', { items: items.map(i => i.id) });
+            io.emit('stock_update', { items: [...stockItemIds] });
             
             // If it is a delivery platform order and is immediately released, notify kitchen
             if (platform && scheduledReleased === 1) {

@@ -160,11 +160,7 @@ exports.recordUsage = async (req, res) => {
         if (rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Item not found' });
         }
-        
-        const currentQty = Number(rows[0].quantity);
-        if (currentQty < qtyNum) {
-            return res.status(400).json({ success: false, message: `Insufficient stock. Current stock is ${currentQty} ${rows[0].unit || ''}` });
-        }
+
         
         await db.execute(
             'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
@@ -179,7 +175,7 @@ exports.recordUsage = async (req, res) => {
         const io = req.app.get('io');
         if (io) io.emit('stock_update', { items: [id] });
 
-        res.json({ success: true, message: 'Usage recorded successfully' });
+        res.json({ success: true, message: 'Outgoing food recorded successfully' });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });

@@ -30,6 +30,56 @@
         #allFoodsList::-webkit-scrollbar-thumb:hover {
             background: rgba(255,255,255,0.25);
         }
+        #manualOrderModal {
+            overflow-y: auto;
+            align-items: flex-start !important;
+        }
+        #manualOrderModal > .glass-card {
+            height: auto;
+            min-height: 0;
+            max-height: calc(100vh - 2rem) !important;
+            margin: 1rem auto;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        .manual-order-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .manual-order-close {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #fff;
+            border-radius: 0.45rem;
+            width: 2.2rem;
+            height: 2.2rem;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+        .manual-order-close:hover { background: rgba(255,255,255,0.16); }
+        .manual-order-grid { flex: none !important; min-height: 0; }
+        #mMenuList, #mCartList {
+            height: min(48vh, 420px) !important;
+            max-height: 420px;
+            min-height: 180px !important;
+            overflow-y: auto !important;
+            scrollbar-width: thin;
+        }
+        @media (max-width: 700px) {
+            #manualOrderModal > .glass-card {
+                max-height: calc(100vh - 1rem) !important;
+                margin: 0.5rem auto;
+                overflow-y: auto;
+            }
+            .manual-order-grid { grid-template-columns: 1fr !important; overflow: visible !important; flex: none; }
+            .manual-order-grid > div { min-height: 260px; }
+            .manual-order-grid > div:last-child { border-left: 0 !important; border-top: 1px solid rgba(255,255,255,0.1); padding: 1rem 0 0 !important; }
+            #mMenuList, #mCartList { height: 300px !important; max-height: none; }
+        }
     </style>
 </head>
 <body>
@@ -150,6 +200,7 @@
                                 <th>Platform</th>
                                 <th>Order ID</th>
                                 <th>Customer</th>
+                                <th>Food Delivered</th>
                                 <th>Amount</th>
                                 <th>Status</th>
                                 <th>Payment</th>
@@ -205,7 +256,13 @@
     <!-- Manual Outgoing Order Modal -->
     <div id="manualOrderModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center; padding:1rem;">
         <div class="glass-card" style="max-width:800px; width:100%; max-height:90vh; display:flex; flex-direction:column;" onclick="event.stopPropagation()">
-            <h2 style="color:#fff; margin-bottom:1rem;">Record Outgoing Food (Manual)</h2>
+            <div class="manual-order-header">
+                <div>
+                    <h2 style="color:#fff; margin:0 0 0.35rem;">Record Outgoing Food (Manual)</h2>
+                    <p style="color:rgba(255,255,255,0.68); margin:0; font-size:0.88rem;">Choose delivery food, set the quantity, and record the outgoing order.</p>
+                </div>
+                <button type="button" class="manual-order-close" onclick="closeManualOrderModal()" title="Close outgoing food form"><i class="fas fa-times"></i></button>
+            </div>
             
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:1rem;">
                 <div class="form-group">
@@ -219,28 +276,29 @@
                 </div>
                 <div class="form-group">
                     <label>Platform Order ID <span style="color: var(--accent-danger);">*</span></label>
-                    <input type="text" id="mPlatformId" class="form-control" placeholder="e.g. #778899" required>
+                    <input type="text" id="mPlatformId" class="form-control" placeholder="Required for external platforms; optional for Tabaruq Delivery">
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 300px; gap:1rem; flex:1; min-height:0;">
+            <div class="manual-order-grid" style="display:grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap:1rem; min-height:0; margin-top:0.25rem;">
                 <!-- Item Selector -->
                 <div style="display:flex; flex-direction:column;">
                     <input type="text" id="mItemSearch" class="form-control" placeholder="Search menu items..." oninput="refreshManualMenu()" style="margin-bottom:0.5rem;">
-                    <div id="mMenuList" style="flex:1; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:0.5rem;"></div>
+                    <div id="mMenuList" style="flex:1; min-height:0; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:0.5rem;"></div>
                 </div>
 
                 <!-- Selected Items (Cart) -->
                 <div style="display:flex; flex-direction:column; border-left:1px solid rgba(255,255,255,0.1); padding-left:1rem;">
-                    <h4 style="color:var(--text-gray); margin-bottom:0.5rem;">Selected Items</h4>
-                    <div id="mCartList" style="flex:1; overflow-y:auto; margin-bottom:1rem;"></div>
+                    <h4 style="color:var(--text-gray); margin:0 0 0.25rem;">Selected Items</h4>
+                    <p style="font-size:0.75rem; color:rgba(255,255,255,0.55); margin:0 0 0.6rem;">Click a food on the left to add it. Use the X to remove it.</p>
+                    <div id="mCartList" style="flex:1; min-height:0; overflow-y:auto; margin-bottom:1rem;"></div>
                     <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:1rem;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:1rem;">
                             <span>Total</span>
                             <strong id="mTotal">KES 0</strong>
                         </div>
-                        <button class="btn btn-primary" style="width:100%;" onclick="saveManualOrder()">Record Order</button>
-                        <button class="btn" style="width:100%; background:var(--text-gray); margin-top:0.5rem;" onclick="closeManualOrderModal()">Cancel</button>
+                        <button type="button" class="btn btn-primary" style="width:100%;" onclick="saveManualOrder()"><i class="fas fa-check-circle"></i> Record Outgoing Order</button>
+                        <button type="button" class="btn" style="width:100%; background:var(--text-gray); margin-top:0.5rem;" onclick="closeManualOrderModal()">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -419,12 +477,13 @@
                     <tr>
                         <td style="font-size:0.85rem;">${new Date(o.created_at).toLocaleString()}</td>
                         <td><span class="badge" style="background:var(--accent-magenta)">${o.platform}</span></td>
-                        <td><strong>${o.platform_order_id || '-'}</strong></td>
+                        <td><strong>${o.platform_order_id || 'Not required'}</strong></td>
                         <td>${o.customer_name}</td>
+                        <td style="min-width:220px; font-weight:600; color:#fff;">${o.delivered_food || 'Food details unavailable'}</td>
                         <td style="font-weight:700;">${formatCurrency(o.total_amount)}</td>
                         <td><span class="badge" style="background:${o.status === 'completed' ? 'var(--accent-success)' : 'var(--accent-warning)'};">${o.status}</span></td>
                         <td><span class="badge" style="background:${o.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-danger)'};">${o.payment_status}</span></td>
-                        <td><button onclick="printDeliveryReceipt(${o.id})" style="background:none; border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:6px; padding:0.3rem 0.6rem; cursor:pointer; font-size:0.8rem;" title="Print Receipt"><i class="fas fa-print"></i> Print</button></td>
+                        <td><button type="button" class="print-action" onclick="printDeliveryReceipt(${o.id})" title="Print Receipt"><i class="fas fa-print"></i> Print</button></td>
                     </tr>
                 `).join('');
             } catch (err) { console.error(err); }
@@ -878,13 +937,18 @@
 
         async function openManualOrderModal() {
             document.getElementById('manualOrderModal').style.display = 'flex';
-            const res = await apiFetch('/inventory');
-            __inventory = res.data.filter(i => i.is_delivery == 1);
-            
-            __mCart = [];
-            document.getElementById('mPlatformId').value = '';
-            refreshManualMenu();
-            renderManualCart();
+            const menuEl = document.getElementById('mMenuList');
+            menuEl.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-gray);"><i class="fas fa-spinner fa-spin"></i> Loading delivery foods...</div>';
+            try {
+                const res = await apiFetch('/inventory');
+                __inventory = res.data.filter(i => i.is_delivery == 1);
+                __mCart = [];
+                document.getElementById('mPlatformId').value = '';
+                refreshManualMenu();
+                renderManualCart();
+            } catch (err) {
+                menuEl.innerHTML = `<div style="padding:2rem; text-align:center; color:var(--accent-danger);"><i class="fas fa-triangle-exclamation"></i><br>${err.message}</div>`;
+            }
         }
 
         function closeManualOrderModal() {
@@ -894,6 +958,9 @@
         function refreshManualMenu() {
             const query = document.getElementById('mItemSearch').value.toLowerCase();
             const platform = document.getElementById('mPlatform').value;
+            const platformId = document.getElementById('mPlatformId');
+            platformId.required = platform !== 'Tabaruq Delivery';
+            platformId.placeholder = platform === 'Tabaruq Delivery' ? 'Optional reference (not required)' : 'e.g. #778899';
             const menuEl = document.getElementById('mMenuList');
             
             const filtered = __inventory.filter(i => {
@@ -902,6 +969,11 @@
                 return matchesSearch && matchesPlatform;
             });
             
+            if (filtered.length === 0) {
+                menuEl.innerHTML = '<div style="padding:2rem 1rem; text-align:center; color:var(--text-gray);"><i class="fas fa-utensils" style="font-size:1.5rem; margin-bottom:0.6rem;"></i><br>No delivery foods found.<br><small>Use Add Delivery Food Item to create one.</small></div>';
+                return;
+            }
+
             menuEl.innerHTML = filtered.map(item => {
                 let price = Number(item.selling_price);
                 if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
@@ -951,7 +1023,7 @@
                             <div>${item.name}</div>
                             <div style="color:var(--text-gray)">${formatCurrency(price)} x ${item.quantity}</div>
                         </div>
-                        <button onclick="removeFromManualCart(${index})" style="background:none; border:none; color:var(--accent-danger); cursor:pointer;"><i class="fas fa-times"></i></button>
+                        <button type="button" onclick="removeFromManualCart(${index})" title="Remove ${item.name}" aria-label="Remove ${item.name}" style="display:flex; align-items:center; gap:0.3rem; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.25); border-radius:4px; padding:0.35rem 0.5rem; color:var(--accent-danger); cursor:pointer; white-space:nowrap;"><i class="fas fa-trash"></i> Remove</button>
                     </div>
                 `;
             }).join('');
@@ -966,12 +1038,11 @@
 
         async function saveManualOrder() {
             const platform_order_id = document.getElementById('mPlatformId').value.trim();
-            if (!platform_order_id) {
+            const platform = document.getElementById('mPlatform').value;
+            if (platform !== 'Tabaruq Delivery' && !platform_order_id) {
                 return alert('Platform Order ID is required');
             }
             if (__mCart.length === 0) return alert('Select items first');
-            
-            const platform = document.getElementById('mPlatform').value;
             
             const total = __mCart.reduce((acc, item) => {
                 let price = Number(item.selling_price);

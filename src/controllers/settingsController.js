@@ -215,10 +215,13 @@ exports.getRecipes = async (req, res) => {
  * Body: { combo_item_id, components: [{ component_item_id, component_qty }] }
  */
 exports.saveRecipe = async (req, res) => {
-    const { combo_item_id, components } = req.body;
+    const { combo_item_id, combo_name, selling_price, components } = req.body;
 
-    if (!combo_item_id || !Array.isArray(components) || components.length === 0) {
-        return res.status(400).json({ success: false, message: 'combo_item_id and at least one component are required' });
+    if ((!combo_item_id && (typeof combo_name !== 'string' || !combo_name.trim())) || !Array.isArray(components) || components.length === 0) {
+        return res.status(400).json({ success: false, message: 'A combo name or item and at least one component are required' });
+    }
+    if (!combo_item_id && (selling_price === undefined || !Number.isFinite(Number(selling_price)) || Number(selling_price) < 0)) {
+        return res.status(400).json({ success: false, message: 'A combo name and valid selling price are required' });
     }
 
     // Validate components
@@ -236,19 +239,30 @@ exports.saveRecipe = async (req, res) => {
         conn = await db.getConnection();
         await conn.beginTransaction();
 
+        let comboItemId = combo_item_id;
+        if (!comboItemId) {
+            const [itemResult] = await conn.execute(
+                `INSERT INTO inventory
+                    (name, category, cost_price, selling_price, unit, quantity, item_type, low_stock_threshold)
+                 VALUES (?, 'Food', 0, ?, 'pcs', 0, 'saleable', 0)`,
+                [combo_name.trim(), Number(selling_price)]
+            );
+            comboItemId = itemResult.insertId;
+        }
+
         // Delete all existing recipe rows for this combo
-        await conn.execute('DELETE FROM item_recipes WHERE combo_item_id = ?', [combo_item_id]);
+        await conn.execute('DELETE FROM item_recipes WHERE combo_item_id = ?', [comboItemId]);
 
         // Insert new components
         for (const c of components) {
             await conn.execute(
                 'INSERT INTO item_recipes (combo_item_id, component_item_id, component_qty) VALUES (?, ?, ?)',
-                [combo_item_id, c.component_item_id, c.component_qty]
+                [comboItemId, c.component_item_id, c.component_qty]
             );
         }
 
         await conn.commit();
-        res.json({ success: true, message: 'Recipe saved successfully' });
+        res.json({ success: true, combo_item_id: comboItemId, message: 'Recipe saved successfully' });
     } catch (err) {
         if (conn) await conn.rollback();
         console.error(err);

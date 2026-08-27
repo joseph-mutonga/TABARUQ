@@ -77,7 +77,31 @@ CREATE TABLE IF NOT EXISTS inventory (
     delivery_platform VARCHAR(50) DEFAULT NULL
 );
 
--- 7. Orders table
+-- 7. Stock Deduction Rules table
+CREATE TABLE IF NOT EXISTS stock_deduction_rules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    menu_item_id INT NOT NULL,
+    stock_item_id INT NOT NULL,
+    deduct_qty DECIMAL(10, 4) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_deduction_rule (menu_item_id, stock_item_id),
+    FOREIGN KEY (menu_item_id) REFERENCES inventory(id) ON DELETE CASCADE,
+    FOREIGN KEY (stock_item_id) REFERENCES inventory(id) ON DELETE CASCADE
+);
+
+-- 8. Item Recipes table
+CREATE TABLE IF NOT EXISTS item_recipes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    combo_item_id INT NOT NULL,
+    component_item_id INT NOT NULL,
+    component_qty DECIMAL(10, 4) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_recipe (combo_item_id, component_item_id),
+    FOREIGN KEY (combo_item_id) REFERENCES inventory(id) ON DELETE CASCADE,
+    FOREIGN KEY (component_item_id) REFERENCES inventory(id) ON DELETE CASCADE
+);
+
+-- 9. Orders table
 CREATE TABLE IF NOT EXISTS orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
     cashier_id INT DEFAULT NULL,
@@ -95,7 +119,7 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 8. Order Items table
+-- 10. Order Items table
 CREATE TABLE IF NOT EXISTS order_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT DEFAULT NULL,
@@ -108,7 +132,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     FOREIGN KEY (item_id) REFERENCES inventory(id) ON DELETE SET NULL
 );
 
--- 9. Payments table
+-- 11. Payments table
 CREATE TABLE IF NOT EXISTS payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT DEFAULT NULL,
@@ -127,7 +151,7 @@ CREATE TABLE IF NOT EXISTS payments (
     FOREIGN KEY (confirmed_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 10. Raw M-Pesa Callback Audit (STK + C2B)
+-- 12. Raw M-Pesa Callback Audit (STK + C2B)
 CREATE TABLE IF NOT EXISTS mpesa_callbacks (
     id INT AUTO_INCREMENT PRIMARY KEY,
     source VARCHAR(16) NOT NULL,
@@ -142,7 +166,7 @@ CREATE TABLE IF NOT EXISTS mpesa_callbacks (
     FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL
 );
 
--- 11. Stock Logs table (Audit trail for inventory)
+-- 13. Stock Logs table (Audit trail for inventory)
 CREATE TABLE IF NOT EXISTS stock_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_id INT DEFAULT NULL,
@@ -154,7 +178,7 @@ CREATE TABLE IF NOT EXISTS stock_logs (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 12. Audit Trail table (General actions)
+-- 14. Audit Trail table (General actions)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT DEFAULT NULL,
@@ -164,7 +188,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 13. Worker Payments table
+-- 15. Worker Payments table
 CREATE TABLE IF NOT EXISTS worker_payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     worker_id INT DEFAULT NULL,
@@ -178,7 +202,7 @@ CREATE TABLE IF NOT EXISTS worker_payments (
     FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
 );
 
--- 14. Attendance table
+-- 16. Attendance table
 CREATE TABLE IF NOT EXISTS attendance (
     id INT AUTO_INCREMENT PRIMARY KEY,
     worker_id INT NOT NULL,
@@ -189,7 +213,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
 );
 
--- 15. Order Settlements table
+-- 17. Order Settlements table
 CREATE TABLE IF NOT EXISTS order_settlements (
     order_id INT NOT NULL,
     settlement_id INT NOT NULL,
@@ -198,7 +222,7 @@ CREATE TABLE IF NOT EXISTS order_settlements (
     FOREIGN KEY (settlement_id) REFERENCES settlements(id) ON DELETE CASCADE
 );
 
--- 16. Platform Fees table
+-- 18. Platform Fees table
 CREATE TABLE IF NOT EXISTS platform_fees (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT DEFAULT NULL,
@@ -207,13 +231,13 @@ CREATE TABLE IF NOT EXISTS platform_fees (
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
 );
 
--- 17. Platform Commissions table
+-- 19. Platform Commissions table
 CREATE TABLE IF NOT EXISTS platform_commissions (
     platform VARCHAR(50) PRIMARY KEY,
     commission_percentage DECIMAL(5, 2) DEFAULT 0.00
 );
 
--- 18. Receipt Settings table
+-- 20. Receipt Settings table
 CREATE TABLE IF NOT EXISTS receipt_settings (
     id INT PRIMARY KEY DEFAULT 1,
     hotel_name VARCHAR(100) NOT NULL DEFAULT 'TABARUQ FOODS',

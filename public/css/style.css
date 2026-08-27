@@ -100,6 +100,29 @@ body::before {
     background: linear-gradient(135deg, var(--primary-hover), var(--accent-cyan));
 }
 
+.print-action {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 5.6rem;
+    padding: 0.45rem 0.75rem !important;
+    border: 1px solid rgba(125, 211, 252, 0.8) !important;
+    border-radius: 0.45rem !important;
+    background: #0284c7 !important;
+    color: #ffffff !important;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.print-action:hover,
+.print-action:focus-visible {
+    background: #0369a1 !important;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+    transform: translateY(-1px);
+}
+
 .btn-success {
     background: linear-gradient(135deg, var(--accent-success), #059669);
     color: white;

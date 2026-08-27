@@ -331,7 +331,12 @@ exports.saveCommissions = async (req, res) => {
 exports.getDeliveryOrders = async (req, res) => {
     const { status, period, platform } = req.query;
     try {
-        let query = 'SELECT o.*, u.username as cashier_name FROM orders o LEFT JOIN users u ON o.cashier_id = u.id WHERE o.platform IS NOT NULL AND (o.scheduled_for IS NULL OR o.scheduled_released = 1)';
+        let query = `SELECT o.*, u.username as cashier_name,
+            (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', COALESCE(oi.item_name, i.name, 'Food')) SEPARATOR ', ')
+             FROM order_items oi LEFT JOIN inventory i ON i.id = oi.item_id
+             WHERE oi.order_id = o.id) AS delivered_food
+            FROM orders o LEFT JOIN users u ON o.cashier_id = u.id
+            WHERE o.platform IS NOT NULL AND (o.scheduled_for IS NULL OR o.scheduled_released = 1)`;
         const params = [];
         
         if (req.user.role !== 'admin') {

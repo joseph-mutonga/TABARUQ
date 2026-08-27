@@ -471,7 +471,7 @@ exports.getPayments = async (req, res) => {
                 LEFT JOIN users u ON p.confirmed_by = u.id
                 WHERE o.payment_status != 'paid'
                   AND o.status NOT IN ('cancelled', 'merged')
-                  AND o.platform IS NULL
+                  AND (o.platform IS NULL OR o.platform = 'Tabaruq Delivery')
 
                 UNION ALL
 
@@ -684,6 +684,8 @@ exports.recordOfflineMpesa = async (req, res) => {
         );
 
         await conn.commit();
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'offline_payment', orderId: oid });
         res.json({ success: true, message: 'Offline M-Pesa payment recorded and order completed' });
     } catch (err) {
         if (conn) {
