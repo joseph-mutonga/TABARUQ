@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
+const db = require('../config/db');
 require('dotenv').config();
 
-exports.verifyToken = (req, res, next) => {
+exports.verifyToken = async (req, res, next) => {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) {
@@ -10,7 +11,19 @@ exports.verifyToken = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
+        const [rows] = await db.execute('SELECT id, username, role, is_active FROM users WHERE id = ?', [decoded.id]);
+
+        if (rows.length === 0) {
+            return res.status(401).json({ success: false, message: 'User not found' });
+        }
+
+        const user = rows[0];
+        const normalizedRole = String(user.role || '').toLowerCase();
+        if (user.is_active === 0 && normalizedRole !== 'admin') {
+            return res.status(403).json({ success: false, message: 'This account has been deactivated. Please contact the administrator.' });
+        }
+
+        req.user = { ...decoded, username: user.username, role: normalizedRole, is_active: user.is_active };
         next();
     } catch (err) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });

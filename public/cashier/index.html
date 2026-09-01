@@ -31,6 +31,16 @@
                 <div id="userInfo" style="color: #ffffff; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.15);"></div>
             </header>
 
+            <div class="glass-card" style="margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div>
+                        <h3 style="margin: 0; color: #ffffff; font-weight: 800;">Production</h3>
+                        <p class="card-small" style="margin: 0.25rem 0 0; color: rgba(255,255,255,0.8);">Record produced stock for the day.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openProductionModal()">Record Production</button>
+                </div>
+            </div>
+
             <div class="order-grid">
                 <div class="glass-card">
                     <div class="category-filters" id="categoryFilters"></div>
@@ -216,6 +226,34 @@
         }
     </style>
 
+    <div id="productionModal" style="display:none; position: fixed; inset:0; background:rgba(0,0,0,0.75); justify-content:center; align-items:center; z-index: 2500;">
+        <div class="glass-card" style="width: 440px; max-width: 92vw;">
+            <h3 style="margin-top: 0; color: #ffffff; font-weight: 800;">Record Production</h3>
+            <form id="productionForm">
+                <div class="form-group">
+                    <label>Select item</label>
+                    <select id="productionItem" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" id="productionQty" class="form-control" min="0.01" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Unit</label>
+                    <input type="text" id="productionUnit" class="form-control" value="pcs" placeholder="pcs">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="productionNotes" class="form-control" rows="3" placeholder="e.g. Toasted bread batch"></textarea>
+                </div>
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
+                    <button type="button" class="btn" style="background: #64748b; color: white;" onclick="document.getElementById('productionModal').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         let inventory = [];
@@ -241,14 +279,83 @@
             }
         }
 
+        function showToast(message, type = 'success') {
+            const existing = document.getElementById('productionToast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'productionToast';
+            toast.textContent = message;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '24px';
+            toast.style.right = '24px';
+            toast.style.padding = '12px 18px';
+            toast.style.borderRadius = '10px';
+            toast.style.background = type === 'success' ? '#16a34a' : '#dc2626';
+            toast.style.color = '#fff';
+            toast.style.fontWeight = '700';
+            toast.style.boxShadow = '0 10px 20px rgba(0,0,0,0.25)';
+            toast.style.zIndex = '5000';
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 2500);
+        }
+
         const user = JSON.parse(localStorage.getItem('user'));
+        const normalizedRole = String(user?.role || '').toLowerCase();
         if (!user) window.location.href = '../index.html';
         document.getElementById('userInfo').textContent = user.username;
 
-        if (user.role === 'admin') {
+        async function openProductionModal() {
+            const modal = document.getElementById('productionModal');
+            const select = document.getElementById('productionItem');
+            modal.style.display = 'flex';
+            select.innerHTML = '<option value="">Select item</option>';
+            try {
+                const response = await apiFetch('/inventory');
+                (response.data || []).forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.id;
+                    option.textContent = item.name;
+                    select.appendChild(option);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        document.getElementById('productionForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const itemId = document.getElementById('productionItem').value;
+            const quantity = Number(document.getElementById('productionQty').value);
+            const unit = document.getElementById('productionUnit').value.trim() || 'pcs';
+            const notes = document.getElementById('productionNotes').value.trim();
+
+            if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+                alert('Please choose an item and enter a valid quantity.');
+                return;
+            }
+
+            try {
+                await apiFetch('/inventory/production', {
+                    method: 'POST',
+                    body: JSON.stringify({ item_id: itemId, quantity, unit, notes })
+                });
+                document.getElementById('productionModal').style.display = 'none';
+                document.getElementById('productionForm').reset();
+                showToast('Production recorded successfully.');
+                loadMenu();
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        if (normalizedRole === 'admin') {
             document.getElementById('adminNavLink').style.display = 'block';
         }
-        if (user.role === 'admin' || user.role === 'cashier') {
+        if (normalizedRole === 'admin' || normalizedRole === 'cashier') {
             document.getElementById('ordersNavLink').style.display = 'block';
             document.getElementById('scheduledNavLink').style.display = 'block';
             document.getElementById('deliveryNavLink').style.display = 'block';

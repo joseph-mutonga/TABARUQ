@@ -304,7 +304,8 @@
         }
 
         const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+        const normalizedRole = String(user?.role || '').toLowerCase();
+        if (!user || normalizedRole !== 'admin') window.location.href = '../index.html';
 
         generateReports();
 

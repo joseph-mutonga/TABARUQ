@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'cashier') NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -41,6 +42,8 @@ CREATE TABLE IF NOT EXISTS settlements (
     amount DECIMAL(10, 2) NOT NULL,
     date_received DATE NOT NULL,
     status ENUM('pending', 'completed') DEFAULT 'pending',
+    attachment_name VARCHAR(255) DEFAULT NULL,
+    attachment_data LONGTEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

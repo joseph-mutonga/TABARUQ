@@ -43,10 +43,15 @@
                 });
 
                 if (response.success) {
+                    const normalizedUser = {
+                        ...response.user,
+                        role: String(response.user.role || '').toLowerCase()
+                    };
+
                     localStorage.setItem('token', response.token);
-                    localStorage.setItem('user', JSON.stringify(response.user));
-                    
-                    if (response.user.role === 'admin') {
+                    localStorage.setItem('user', JSON.stringify(normalizedUser));
+
+                    if (normalizedUser.role === 'admin') {
                         window.location.href = 'admin/index.html';
                     } else {
                         window.location.href = 'cashier/index.html';

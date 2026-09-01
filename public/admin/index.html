@@ -58,6 +58,33 @@
                     <div class="card-title"><i class="fas fa-money-bill-wave"></i><span>Daily Profit</span></div>
                     <div class="card-value" id="todayProfit">KES 0</div>
                 </div>
+                <div class="dashboard-card">
+                    <div class="card-title"><i class="fas fa-industry"></i><span>Today's Production</span></div>
+                    <div class="card-value" id="todayProduction">0</div>
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin: 1.5rem 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <h3 style="margin: 0; color: #ffffff; font-weight: 800;">Today's Production Records</h3>
+                    </div>
+                    <button class="btn btn-primary" onclick="openProductionModalFromAdmin()">Record Production</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Qty</th>
+                                <th>Unit</th>
+                                <th>Recorded By</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="todayProductionBody"></tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="quick-actions glass-card">
@@ -202,10 +229,38 @@
         </main>
     </div>
 
+    <div id="adminProductionModal" style="display:none; position: fixed; inset:0; background:rgba(0,0,0,0.75); justify-content:center; align-items:center; z-index: 2500;">
+        <div class="glass-card" style="width: 440px; max-width: 92vw;">
+            <h3 style="margin-top: 0; color: #ffffff; font-weight: 800;">Record Production</h3>
+            <form id="adminProductionForm">
+                <div class="form-group">
+                    <label>Item</label>
+                    <select id="adminProductionItem" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" id="adminProductionQty" class="form-control" min="0.01" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Unit</label>
+                    <input type="text" id="adminProductionUnit" class="form-control" value="pcs" placeholder="pcs">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="adminProductionNotes" class="form-control" rows="3" placeholder="Production details"></textarea>
+                </div>
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
+                    <button type="button" class="btn" style="background: #64748b; color: white;" onclick="document.getElementById('adminProductionModal').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Production</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+        if (!user || String(user.role || '').toLowerCase() !== 'admin') window.location.href = '../index.html';
         document.getElementById('userInfo').textContent = `Welcome, ${user.username}`;
         document.getElementById('logoutBtn').onclick = () => {
             localStorage.clear();
@@ -218,6 +273,27 @@
 
         function showComingSoon(feature) {
             alert(`${feature} module will be added soon for the full hotel POS experience.`);
+        }
+
+        async function openProductionModalFromAdmin() {
+            const modal = document.getElementById('adminProductionModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            const select = document.getElementById('adminProductionItem');
+            if (select) {
+                select.innerHTML = '<option value="">Select item</option>';
+                try {
+                    const response = await apiFetch('/inventory');
+                    (response.data || []).forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item.id;
+                        option.textContent = `${item.name} (${item.quantity} ${item.unit || 'pcs'})`;
+                        select.appendChild(option);
+                    });
+                } catch (err) {
+                    console.error(err);
+                }
+            }
         }
 
         async function loadStats() {
@@ -233,6 +309,18 @@
                 document.getElementById('todaySales').textContent = formatCurrency(data.todaySales);
                 document.getElementById('todayExpenses').textContent = formatCurrency(data.todayExpenses);
                 document.getElementById('todayProfit').textContent = formatCurrency(data.todaySales - data.todayExpenses);
+                document.getElementById('todayProduction').textContent = `${Number(data.todayProduction || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} units`;
+
+                const productionBody = document.getElementById('todayProductionBody');
+                productionBody.innerHTML = (data.todayProductionRecords || []).map(record => `
+                    <tr>
+                        <td>${record.item_name || 'Produced Item'}</td>
+                        <td>${Number(record.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        <td>${record.unit || 'pcs'}</td>
+                        <td>${record.recorded_by_name || 'System'}</td>
+                        <td>${record.notes || 'Production'}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="5" style="text-align:center; color: rgba(255,255,255,0.7);">No production recorded today.</td></tr>';
 
                 document.getElementById('topProducts').innerHTML = data.topProducts.map((item, index) => `
                     <article class="product-card">
@@ -274,6 +362,31 @@
                 console.error(err);
             }
         }
+
+        document.getElementById('adminProductionForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const itemId = document.getElementById('adminProductionItem').value;
+            const quantity = Number(document.getElementById('adminProductionQty').value);
+            const unit = document.getElementById('adminProductionUnit').value.trim() || 'pcs';
+            const notes = document.getElementById('adminProductionNotes').value.trim();
+
+            if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+                alert('Please choose an item and enter a valid quantity.');
+                return;
+            }
+
+            try {
+                await apiFetch('/inventory/production', {
+                    method: 'POST',
+                    body: JSON.stringify({ item_id: itemId, quantity, unit, notes })
+                });
+                document.getElementById('adminProductionModal').style.display = 'none';
+                document.getElementById('adminProductionForm').reset();
+                await loadStats();
+            } catch (err) {
+                alert(err.message);
+            }
+        };
 
         async function checkPendingPayments() {
             try {

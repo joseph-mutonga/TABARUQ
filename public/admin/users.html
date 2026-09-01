@@ -43,6 +43,7 @@
                             <tr>
                                 <th>Username</th>
                                 <th>Role</th>
+                                <th>Status</th>
                                 <th>Created At</th>
                                 <th>Actions</th>
                             </tr>
@@ -91,12 +92,34 @@
                     <tr>
                         <td>${u.username}</td>
                         <td><span style="background: ${u.role==='admin'?'var(--primary)':'var(--card-bg)'}; padding: 3px 8px; border-radius: 4px;">${u.role}</span></td>
+                        <td>
+                            <span class="badge" style="background: ${Number(u.is_active) === 0 ? 'var(--accent-danger)' : 'var(--accent-success)'};">
+                                ${Number(u.is_active) === 0 ? 'Inactive' : 'Active'}
+                            </span>
+                        </td>
                         <td>${new Date(u.created_at).toLocaleString()}</td>
                         <td>
-                            ${u.username !== 'admin' ? `<button class="btn" style="background: var(--accent-danger); padding:0.5rem;" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>` : ''}
+                            ${u.username !== 'admin' ? `
+                                <button class="btn" style="background: ${Number(u.is_active) === 0 ? 'var(--accent-success)' : 'var(--accent-warning)'}; padding:0.5rem; margin-right:0.5rem;" onclick="toggleUserStatus(${u.id}, ${Number(u.is_active) === 0 ? 1 : 0})">
+                                    <i class="fas ${Number(u.is_active) === 0 ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+                                </button>
+                                <button class="btn" style="background: var(--accent-danger); padding:0.5rem;" onclick="deleteUser(${u.id})"><i class="fas fa-trash"></i></button>
+                            ` : ''}
                         </td>
                     </tr>
                 `).join('');
+            } catch (err) { alert(err.message); }
+        }
+
+        async function toggleUserStatus(id, isActive) {
+            try {
+                const action = isActive ? 'activate' : 'deactivate';
+                if (!confirm(`Are you sure you want to ${action} this cashier account?`)) return;
+                await apiFetch(`/auth/users/${id}/status`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ is_active: isActive })
+                });
+                loadUsers();
             } catch (err) { alert(err.message); }
         }
 
@@ -124,7 +147,7 @@
         }
 
         const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+        if (!user || String(user.role || '').toLowerCase() !== 'admin') window.location.href = '../index.html';
 
         async function checkPendingPayments() {
             try {

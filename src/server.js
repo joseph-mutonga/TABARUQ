@@ -21,6 +21,63 @@ io.on('connection', (socket) => {
 // Attach io to app to be accessible in routes/controllers
 app.set('io', io);
 
+async function ensureSchemaCompatibility() {
+    const migrations = [
+        {
+            table: 'users',
+            column: 'is_active',
+            query: 'ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1'
+        },
+        {
+            table: 'settlements',
+            column: 'attachment_name',
+            query: 'ALTER TABLE settlements ADD COLUMN attachment_name VARCHAR(255) NULL'
+        },
+        {
+            table: 'settlements',
+            column: 'attachment_data',
+            query: 'ALTER TABLE settlements ADD COLUMN attachment_data LONGTEXT NULL'
+        }
+    ];
+
+    const productionTableSql = `
+        CREATE TABLE IF NOT EXISTS production_records (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            item_id INT DEFAULT NULL,
+            item_name VARCHAR(255) NOT NULL,
+            quantity DECIMAL(10, 2) NOT NULL,
+            unit VARCHAR(20) DEFAULT 'pcs',
+            production_date DATE NOT NULL,
+            recorded_by INT DEFAULT NULL,
+            notes VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (item_id) REFERENCES inventory(id) ON DELETE SET NULL,
+            FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+    `;
+
+    for (const migration of migrations) {
+        try {
+            const [existing] = await db.execute(
+                'SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
+                [migration.table, migration.column]
+            );
+
+            if (existing.length === 0) {
+                await db.execute(migration.query);
+            }
+        } catch (err) {
+            console.warn('[Schema] Migration warning:', err.message || err);
+        }
+    }
+
+    try {
+        await db.execute(productionTableSql);
+    } catch (err) {
+        console.warn('[Schema] Production table warning:', err.message || err);
+    }
+}
+
 // Start Background Job to automatically release scheduled orders when preparation is due (30 minutes prep window)
 function startScheduledOrderReleaseJob(io) {
     setInterval(async () => {
@@ -84,8 +141,15 @@ function startScheduledOrderReleaseJob(io) {
     console.log('[Scheduler] Background scheduled order release job started (60s tick).');
 }
 
-startScheduledOrderReleaseJob(io);
+async function bootstrap() {
+    await ensureSchemaCompatibility();
+    startScheduledOrderReleaseJob(io);
+    server.listen(PORT, () => {
+        console.log(`Server running on port http://localhost:${PORT}`);
+    });
+}
 
-server.listen(PORT, () => {
-    console.log(`Server running on port http://localhost:${PORT}`);
+bootstrap().catch((err) => {
+    console.error('Bootstrap failed:', err);
+    process.exit(1);
 });

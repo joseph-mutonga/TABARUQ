@@ -242,8 +242,11 @@
                     <label>Amount Received (Net)</label>
                     <input type="number" id="sAmount" class="form-control" step="0.01" required>
                 </div>
-
-
+                <div class="form-group">
+                    <label>Settlement File / Screenshot (Optional)</label>
+                    <input type="file" id="sAttachment" class="form-control" accept=".png,.jpg,.jpeg,.pdf,.webp,.txt,.csv,.xlsx,.xls">
+                    <small style="color: var(--text-gray);">This is stored with the settlement record for reconciliation.</small>
+                </div>
 
                 <div style="display:flex; gap:1rem; margin-top:2rem;">
                     <button type="button" class="btn" style="flex:1; background:#475569;" onclick="closeSettlementModal()">Cancel</button>
@@ -836,11 +839,25 @@
             const payout_id = document.getElementById('sPayoutId').value;
             const amount = document.getElementById('sAmount').value;
             const date_received = document.getElementById('sDate').value;
+            const fileInput = document.getElementById('sAttachment');
+            let attachment_name = null;
+            let attachment_data = null;
+
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                attachment_name = file.name;
+                attachment_data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(new Error('Failed to read the selected settlement file.'));
+                    reader.readAsDataURL(file);
+                });
+            }
 
             try {
                 await apiFetch('/delivery/settlements', {
                     method: 'POST',
-                    body: JSON.stringify({ platform, payout_id, amount, date_received })
+                    body: JSON.stringify({ platform, payout_id, amount, date_received, attachment_name, attachment_data })
                 });
                 alert('Settlement recorded and reconciled successfully!');
                 closeSettlementModal();
@@ -849,7 +866,8 @@
         };
 
         const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || (user.role !== 'admin' && user.role !== 'cashier')) {
+        const normalizedRole = String(user?.role || '').toLowerCase();
+        if (!user || (normalizedRole !== 'admin' && normalizedRole !== 'cashier')) {
             window.location.href = '../index.html';
         }
 

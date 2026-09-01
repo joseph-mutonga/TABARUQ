@@ -40,6 +40,15 @@ exports.getStats = async (req, res) => {
         const [[cashSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method = "Cash" AND status = "confirmed" AND YEAR(confirmed_at) = YEAR(CURDATE())');
         const [[mpesaSales]] = await db.execute('SELECT SUM(amount) as total FROM payments WHERE payment_method LIKE "%M-Pesa%" AND status = "confirmed" AND YEAR(confirmed_at) = YEAR(CURDATE())');
         const [[yearlyExpenses]] = await db.execute('SELECT SUM(amount) as total FROM expenses WHERE YEAR(expense_date) = YEAR(CURDATE())');
+        const [[todayProduction]] = await db.execute('SELECT COALESCE(SUM(quantity), 0) as total FROM production_records WHERE production_date = ?', [today]);
+        const [todayProductionRecords] = await db.execute(`
+            SELECT pr.*, u.username AS recorded_by_name
+            FROM production_records pr
+            LEFT JOIN users u ON u.id = pr.recorded_by
+            WHERE pr.production_date = ?
+            ORDER BY pr.created_at DESC
+            LIMIT 8
+        `, [today]);
 
         const [recentOrders] = await db.execute(`
             SELECT o.*, o.customer_name, COALESCE(u.username, o.platform, 'Delivery') as cashier_name, p.methods as payment_method 
@@ -68,6 +77,8 @@ exports.getStats = async (req, res) => {
                 itemsCount: itemsCount.total || 0,
                 itemsNeedsRestocking: lowStock.total || 0,
                 openSales: dueInvoices.total || 0,
+                todayProduction: todayProduction.total || 0,
+                todayProductionRecords,
                 topProducts,
                 accountReport: [
                     {

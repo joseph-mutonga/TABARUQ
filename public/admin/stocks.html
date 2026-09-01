@@ -165,6 +165,29 @@
                     </table>
                 </div>
             </div>
+
+            <div class="glass-card" style="margin-top:2rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <h3 style="color:#fff; margin:0;">Recent Stock Flow</h3>
+                    <span class="badge" style="background: var(--primary);">Last 40 entries</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Item</th>
+                                <th>Change</th>
+                                <th>Reason</th>
+                                <th>User</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockFlowBody">
+                            <tr><td colspan="5" style="text-align:center; color: var(--text-gray); padding:1.5rem;">Loading stock flow...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -304,6 +327,33 @@
                 renderStocks(ingredients);
             } catch (err) {
                 alert(err.message);
+            }
+        }
+
+        async function loadStockFlow() {
+            try {
+                const response = await apiFetch('/inventory/stock-logs');
+                const rows = response.data || [];
+                const tbody = document.getElementById('stockFlowBody');
+                if (rows.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-gray); padding:1.5rem;">No stock flow recorded yet.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = rows.map(log => {
+                    const sign = Number(log.change_amount) >= 0 ? '+' : '-';
+                    const color = Number(log.change_amount) >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)';
+                    return `
+                        <tr>
+                            <td>${new Date(log.created_at).toLocaleString()}</td>
+                            <td><strong>${log.item_name || 'Item'}</strong> <span style="color: var(--text-gray); font-size:0.8rem;">(${log.unit || 'pcs'})</span></td>
+                            <td style="color:${color}; font-weight:700;">${sign}${Math.abs(Number(log.change_amount)).toFixed(2)}</td>
+                            <td>${log.reason || 'Stock update'}</td>
+                            <td>${log.user_name || 'System'}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error(err);
             }
         }
 
@@ -545,7 +595,7 @@
         }
 
         const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || user.role !== 'admin') window.location.href = '../index.html';
+        if (!user || String(user.role || '').toLowerCase() !== 'admin') window.location.href = '../index.html';
 
         async function checkPendingPayments() {
             try {
@@ -565,8 +615,10 @@
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
 
         loadStocks();
+        loadStockFlow();
         checkPendingPayments();
         setInterval(checkPendingPayments, 30000);
+        setInterval(loadStockFlow, 30000);
     </script>
 </body>
 </html>

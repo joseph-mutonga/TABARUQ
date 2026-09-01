@@ -181,7 +181,7 @@ exports.updateDeliveryStatus = async (req, res) => {
 
 // 3. Payment Reconciliation
 exports.recordSettlement = async (req, res) => {
-    const { platform, payout_id, amount, date_received } = req.body;
+    const { platform, payout_id, amount, date_received, attachment_name, attachment_data } = req.body;
 
     const connection = await db.getConnection();
     try {
@@ -189,8 +189,8 @@ exports.recordSettlement = async (req, res) => {
 
         // Record settlement
         const [result] = await connection.execute(
-            'INSERT INTO settlements (platform, payout_id, amount, date_received, status) VALUES (?, ?, ?, ?, ?)',
-            [platform, payout_id, amount, date_received, 'completed']
+            'INSERT INTO settlements (platform, payout_id, amount, date_received, status, attachment_name, attachment_data) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [platform, payout_id, amount, date_received, 'completed', attachment_name || null, attachment_data || null]
         );
         const settlementId = result.insertId;
 

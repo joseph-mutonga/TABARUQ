@@ -9,6 +9,106 @@ exports.getItems = async (req, res) => {
     }
 };
 
+exports.getStockFlow = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT sl.id, sl.item_id, i.name AS item_name, i.unit,
+                   sl.change_amount, sl.reason, sl.created_at,
+                   u.username AS user_name
+            FROM stock_logs sl
+            LEFT JOIN inventory i ON i.id = sl.item_id
+            LEFT JOIN users u ON u.id = sl.user_id
+            ORDER BY sl.created_at DESC
+            LIMIT 40
+        `);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('getStockFlow Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.recordProduction = async (req, res) => {
+    const { item_id, item_name, quantity, unit, notes } = req.body;
+    const qty = Number(quantity);
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ success: false, message: 'Production quantity must be greater than zero.' });
+    }
+
+    const selectedItemId = item_id ? Number(item_id) : null;
+    const resolvedName = (item_name || '').trim() || 'Produced Item';
+    const resolvedUnit = unit || 'pcs';
+
+    let conn;
+    try {
+        conn = await db.getConnection();
+        await conn.beginTransaction();
+
+        let itemName = resolvedName;
+        if (selectedItemId) {
+            const [itemRows] = await conn.execute('SELECT id, name, unit FROM inventory WHERE id = ? FOR UPDATE', [selectedItemId]);
+            if (itemRows.length === 0) {
+                await conn.rollback();
+                return res.status(404).json({ success: false, message: 'Selected item not found.' });
+            }
+
+            itemName = itemRows[0].name;
+            await conn.execute('UPDATE inventory SET quantity = quantity + ? WHERE id = ?', [qty, selectedItemId]);
+            await conn.execute(
+                'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
+                [selectedItemId, req.user.id, qty, notes || 'Production']
+            );
+        }
+
+        const [result] = await conn.execute(
+            'INSERT INTO production_records (item_id, item_name, quantity, unit, production_date, recorded_by, notes) VALUES (?, ?, ?, ?, CURDATE(), ?, ?)',
+            [selectedItemId, itemName, qty, resolvedUnit || itemName, req.user.id, notes || 'Production']
+        );
+
+        await conn.commit();
+
+        const io = req.app.get('io');
+        if (io) io.emit('stock_update', { items: selectedItemId ? [selectedItemId] : [] });
+
+        res.status(201).json({
+            success: true,
+            message: 'Production recorded successfully.',
+            data: {
+                id: result.insertId,
+                item_id: selectedItemId,
+                item_name: itemName,
+                quantity: qty,
+                unit: resolvedUnit || 'pcs',
+                recorded_by: req.user.id,
+                notes: notes || 'Production'
+            }
+        });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    } finally {
+        if (conn) conn.release();
+    }
+};
+
+exports.getProductionRecords = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT pr.*, u.username AS recorded_by_name
+            FROM production_records pr
+            LEFT JOIN users u ON u.id = pr.recorded_by
+            WHERE pr.production_date = CURDATE()
+            ORDER BY pr.created_at DESC
+        `);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('getProductionRecords Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 exports.addItem = async (req, res) => {
     const { name, category, cost_price, selling_price, unit, quantity, item_type, uber_price, glovo_price, bolt_price, own_delivery_price, is_delivery, delivery_platform, low_stock_threshold } = req.body;
     let conn;
