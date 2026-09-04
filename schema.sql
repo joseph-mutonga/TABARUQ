@@ -104,10 +104,29 @@ CREATE TABLE IF NOT EXISTS item_recipes (
     FOREIGN KEY (component_item_id) REFERENCES inventory(id) ON DELETE CASCADE
 );
 
--- 9. Orders table
+-- 9. Cashier Shifts table
+CREATE TABLE IF NOT EXISTS shifts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cashier_id INT NOT NULL,
+    shift_name VARCHAR(50) NOT NULL DEFAULT 'Day',
+    shift_period ENUM('morning', 'evening') NOT NULL DEFAULT 'morning',
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at DATETIME DEFAULT NULL,
+    opening_cash DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    closing_cash DECIMAL(10, 2) DEFAULT NULL,
+    status ENUM('open', 'closed') NOT NULL DEFAULT 'open',
+    notes VARCHAR(255) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_shifts_cashier_status (cashier_id, status),
+    INDEX idx_shifts_started_at (started_at),
+    FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+-- 10. Orders table
 CREATE TABLE IF NOT EXISTS orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
     cashier_id INT DEFAULT NULL,
+    shift_id INT DEFAULT NULL,
     total_amount DECIMAL(10, 2) NOT NULL,
     status ENUM('pending', 'completed', 'cancelled', 'merged') DEFAULT 'pending',
     payment_status ENUM('pending', 'paid', 'failed', 'partial', 'merged') DEFAULT 'pending',
@@ -139,6 +158,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE TABLE IF NOT EXISTS payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT DEFAULT NULL,
+    shift_id INT DEFAULT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     transaction_id VARCHAR(100) DEFAULT NULL, -- M-Pesa Receipt Number
     phone_number VARCHAR(20) DEFAULT NULL,
@@ -209,6 +229,8 @@ CREATE TABLE IF NOT EXISTS worker_payments (
 CREATE TABLE IF NOT EXISTS attendance (
     id INT AUTO_INCREMENT PRIMARY KEY,
     worker_id INT NOT NULL,
+    shift_id INT DEFAULT NULL,
+    shift_period ENUM('morning', 'evening') DEFAULT NULL,
     date DATE NOT NULL,
     status ENUM('present', 'absent', 'half-day') DEFAULT 'present',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

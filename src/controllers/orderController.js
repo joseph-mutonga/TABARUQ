@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { getOpenShift } = require('./shiftController');
 
 exports.createOrder = async (req, res) => {
     const { items, total_amount, customer_name, platform, platform_order_id, isMerge, mergedOrderIds, scheduled_for } = req.body;
@@ -6,6 +7,11 @@ exports.createOrder = async (req, res) => {
     
     try {
         await connection.beginTransaction();
+
+        const shift = await getOpenShift(req.user.id, connection);
+        if (!shift) {
+            throw new Error('Open a cashier shift before creating orders');
+        }
 
         if (!Array.isArray(items) || items.length === 0) {
             throw new Error('An order must contain at least one item');
@@ -67,8 +73,8 @@ exports.createOrder = async (req, res) => {
         }
 
         const [orderResult] = await connection.execute(
-            'INSERT INTO orders (cashier_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [req.user.id, totalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
+            'INSERT INTO orders (cashier_id, shift_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [req.user.id, shift.id, totalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
         );
         const orderId = orderResult.insertId;
 
@@ -235,7 +241,11 @@ exports.createOrder = async (req, res) => {
     } catch (err) {
         await connection.rollback();
         console.error('ERROR IN CREATE_ORDER:', err);
-        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+        const requiresShift = err.message === 'Open a cashier shift before creating orders';
+        res.status(requiresShift ? 400 : 500).json({
+            success: false,
+            message: requiresShift ? err.message : 'Server error: ' + err.message
+        });
     } finally {
         connection.release();
     }

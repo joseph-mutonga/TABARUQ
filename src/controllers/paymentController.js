@@ -67,9 +67,9 @@ async function finalizeIncomingLink(conn, { orderId, paymentId, userId, payment 
     const appendApplied = ` — Applied to order #${orderId}`;
     const newMsg = clipMpesaMessage((payment.mpesa_result_message || '') + appendApplied);
     await conn.execute(
-        'UPDATE payments SET order_id = ?, status = ?, confirmed_at = COALESCE(confirmed_at, CURRENT_TIMESTAMP), ' +
+        'UPDATE payments SET order_id = ?, shift_id = (SELECT shift_id FROM orders WHERE id = ?), status = ?, confirmed_at = COALESCE(confirmed_at, CURRENT_TIMESTAMP), ' +
             'confirmed_by = COALESCE(confirmed_by, ?), mpesa_result_message = ? WHERE id = ?',
-        [orderId, 'confirmed', userId, newMsg, paymentId]
+        [orderId, orderId, 'confirmed', userId, newMsg, paymentId]
     );
     const [pendingOthers] = await conn.execute(
         "SELECT id, mpesa_result_message FROM payments WHERE order_id = ? AND id <> ? AND status = 'pending'",
@@ -323,8 +323,8 @@ exports.mpesaC2BConfirmation = async (req, res) => {
             }
 
             const [ins] = await conn.execute(
-                'INSERT INTO payments (order_id, amount, transaction_id, phone_number, status, customer_name, payment_method, confirmed_at, mpesa_result_message) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
-                [orderId, amountDecimal, TransID, MSISDN, 'confirmed', customerName, 'M-Pesa (Buy Goods)', c2bMessage]
+                'INSERT INTO payments (order_id, shift_id, amount, transaction_id, phone_number, status, customer_name, payment_method, confirmed_at, mpesa_result_message) VALUES (?, (SELECT shift_id FROM orders WHERE id = ?), ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
+                [orderId, orderId, amountDecimal, TransID, MSISDN, 'confirmed', customerName, 'M-Pesa (Buy Goods)', c2bMessage]
             );
             const paymentId = ins.insertId;
 
@@ -392,8 +392,8 @@ exports.confirmPayment = async (req, res) => {
 
         // Update payment with orderId and status
         await conn.execute(
-            'UPDATE payments SET order_id = ?, status = ?, confirmed_at = CURRENT_TIMESTAMP, confirmed_by = ? WHERE id = ?',
-            [orderId, 'confirmed', req.user.id, paymentId]
+            'UPDATE payments SET order_id = ?, shift_id = (SELECT shift_id FROM orders WHERE id = ?), status = ?, confirmed_at = CURRENT_TIMESTAMP, confirmed_by = ? WHERE id = ?',
+            [orderId, orderId, 'confirmed', req.user.id, paymentId]
         );
 
         // Update order status
@@ -539,8 +539,8 @@ exports.processCashPayment = async (req, res) => {
     try {
         // Create payment record
         await db.execute(
-            'INSERT INTO payments (order_id, amount, payment_method, status, confirmed_at, confirmed_by) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
-            [orderId, amount, 'Cash', 'confirmed', req.user.id]
+            'INSERT INTO payments (order_id, shift_id, amount, payment_method, status, confirmed_at, confirmed_by) VALUES (?, (SELECT shift_id FROM orders WHERE id = ?), ?, ?, ?, CURRENT_TIMESTAMP, ?)',
+            [orderId, orderId, amount, 'Cash', 'confirmed', req.user.id]
         );
 
         // Update order status
@@ -581,7 +581,7 @@ exports.recordOfflineMpesa = async (req, res) => {
         await conn.beginTransaction();
 
         const [orders] = await conn.execute(
-            'SELECT id, total_amount, payment_status, status, customer_name FROM orders WHERE id = ? FOR UPDATE',
+            'SELECT id, shift_id, total_amount, payment_status, status, customer_name FROM orders WHERE id = ? FOR UPDATE',
             [oid]
         );
         if (orders.length === 0) {
@@ -662,10 +662,10 @@ exports.recordOfflineMpesa = async (req, res) => {
 
         if (pendingRow) {
             await conn.execute(
-                'UPDATE payments SET transaction_id = ?, amount = ?, phone_number = COALESCE(NULLIF(?, ""), phone_number), ' +
+                    'UPDATE payments SET shift_id = ?, transaction_id = ?, amount = ?, phone_number = COALESCE(NULLIF(?, ""), phone_number), ' +
                     "status = 'confirmed', payment_method = 'M-Pesa (Offline)', confirmed_at = CURRENT_TIMESTAMP, confirmed_by = ?, " +
                     'mpesa_result_message = ?, customer_name = COALESCE(NULLIF(?, ""), customer_name) WHERE id = ? AND order_id = ?',
-                [cleanReceipt, payAmount, phone, req.user.id, msg, custMerge, pendingRow.id, oid]
+                [order.shift_id, cleanReceipt, payAmount, phone, req.user.id, msg, custMerge, pendingRow.id, oid]
             );
         } else {
             let cust = nameFromReq || order.customer_name || 'Guest';
@@ -673,8 +673,8 @@ exports.recordOfflineMpesa = async (req, res) => {
                 cust = cust.substring(0, 252) + '...';
             }
             await conn.execute(
-                'INSERT INTO payments (order_id, amount, transaction_id, phone_number, payment_method, status, confirmed_at, confirmed_by, customer_name, mpesa_result_message) VALUES (?, ?, ?, NULLIF(?, ""), ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)',
-                [oid, payAmount, cleanReceipt, phone, 'M-Pesa (Offline)', 'confirmed', req.user.id, cust, msg]
+                'INSERT INTO payments (order_id, shift_id, amount, transaction_id, phone_number, payment_method, status, confirmed_at, confirmed_by, customer_name, mpesa_result_message) VALUES (?, ?, ?, ?, NULLIF(?, ""), ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)',
+                [oid, order.shift_id, payAmount, cleanReceipt, phone, 'M-Pesa (Offline)', 'confirmed', req.user.id, cust, msg]
             );
         }
 

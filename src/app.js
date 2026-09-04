@@ -22,6 +22,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/delivery', require('./routes/delivery'));
 app.use('/api/workers', require('./routes/workers'));
+app.use('/api/shifts', require('./routes/shifts'));
 app.use('/api/c2b', require('./routes/c2b'));
 app.use('/api/settings', require('./routes/settings'));
 

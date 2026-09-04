@@ -80,6 +80,7 @@
                 <div class="tab" onclick="switchTab('attendance')">Daily Attendance</div>
                 <div class="tab" onclick="switchTab('weekly')">Weekly Overview</div>
                 <div class="tab" onclick="switchTab('payments')">Payment History</div>
+                <div class="tab" onclick="switchTab('shifts')">Cashier Shifts</div>
             </div>
 
             <div id="workersSection">
@@ -170,6 +171,21 @@
                             </thead>
                             <tbody id="weeklyBody"></tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="shiftsSection" style="display:none;">
+                <div class="glass-card">
+                    <h3>Cashier Shift Close-outs</h3>
+                    <div style="display:flex; gap:0.75rem; align-items:end; flex-wrap:wrap; margin:1rem 0 1.5rem;">
+                        <div class="form-group" style="margin:0; min-width:180px;"><label>Cashier</label><select id="adminCashier" class="form-control"></select></div>
+                        <div class="form-group" style="margin:0; min-width:150px;"><label>Shift Period</label><select id="adminShiftPeriod" class="form-control"><option value="morning">Morning</option><option value="evening">Evening</option></select></div>
+                        <div class="form-group" style="margin:0; width:150px;"><label>Opening Cash</label><input id="adminOpeningCash" class="form-control" type="number" min="0" step="0.01" value="0"></div>
+                        <button class="btn btn-primary" onclick="assignCashierShift()"><i class="fas fa-user-clock"></i> Assign Shift</button>
+                    </div>
+                    <div class="table-container">
+                        <table><thead><tr><th>Cashier</th><th>Shift</th><th>Started</th><th>Ended</th><th>Cash Taken</th><th>M-Pesa Recorded</th><th>Closing Cash</th><th>Status</th></tr></thead><tbody id="shiftsBody"></tbody></table>
                     </div>
                 </div>
             </div>
@@ -288,6 +304,7 @@
                     <td>
                         <button class="btn" style="padding: 0.5rem; background: var(--primary);" onclick="editWorker(${w.id})"><i class="fas fa-edit"></i></button>
                         <button class="btn" style="padding: 0.5rem; background: var(--accent-danger);" onclick="deleteWorker(${w.id})"><i class="fas fa-trash"></i></button>
+                                    <th>Shift Period</th>
                     </td>
                 </tr>
             `).join('');
@@ -329,6 +346,7 @@
             document.getElementById('paymentsSection').style.display = 'none';
             document.getElementById('attendanceSection').style.display = 'none';
             document.getElementById('weeklySection').style.display = 'none';
+            document.getElementById('shiftsSection').style.display = 'none';
 
             if (tab === 'workers') {
                 document.getElementById('workersSection').style.display = 'block';
@@ -343,6 +361,9 @@
                 document.getElementById('weeklySection').style.display = 'block';
                 document.getElementById('weeklyDate').value = new Date().toLocaleDateString('en-CA');
                 loadWeeklyAttendance();
+            } else if (tab === 'shifts') {
+                document.getElementById('shiftsSection').style.display = 'block';
+                loadShifts();
             }
         }
 
@@ -417,9 +438,10 @@
                     <tr>
                         <td><strong>${w.worker_name}</strong></td>
                         <td>${w.role || ''}</td>
+                        <td><select id="period-${w.worker_id}" class="form-control" style="min-width:130px;"><option value="">Select period</option><option value="morning" ${w.shift_period === 'morning' ? 'selected' : ''}>Morning</option><option value="evening" ${w.shift_period === 'evening' ? 'selected' : ''}>Evening</option></select></td>
                         <td>
                             <div style="display:flex; gap:0.5rem;">
-                                <button class="btn" style="background:${w.status === 'present' ? 'var(--accent-success)' : 'rgba(255,255,255,0.1)'}; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="markAttendance(${w.worker_id}, 'present')">Present</button>
+                                <button class="btn" style="background:${w.status === 'present' ? 'var(--accent-success)' : 'rgba(255,255,255,0.1)'}; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="markAttendance(${w.worker_id}, 'present')">Full Day</button>
                                 <button class="btn" style="background:${w.status === 'absent' ? 'var(--accent-danger)' : 'rgba(255,255,255,0.1)'}; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="markAttendance(${w.worker_id}, 'absent')">Absent</button>
                                 <button class="btn" style="background:${w.status === 'half-day' ? 'var(--accent-warning)' : 'rgba(255,255,255,0.1)'}; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="markAttendance(${w.worker_id}, 'half-day')">Half Day</button>
                             </div>
@@ -429,12 +451,38 @@
             } catch (err) { console.error(err); }
         }
 
+        let shifts = [];
+        async function loadShifts() {
+            try {
+                const res = await apiFetch('/shifts');
+                shifts = res.data || [];
+                const usersRes = await apiFetch('/auth/users');
+                const cashiers = (usersRes.data || []).filter(user => user.role === 'cashier' && Number(user.is_active) === 1);
+                document.getElementById('adminCashier').innerHTML = cashiers.length ? cashiers.map(user => `<option value="${user.id}">${user.username}</option>`).join('') : '<option value="">No active cashiers</option>';
+                document.getElementById('shiftsBody').innerHTML = shifts.map(s => `<tr><td>${s.cashier_name}</td><td>${s.shift_period ? s.shift_period[0].toUpperCase() + s.shift_period.slice(1) : s.shift_name}</td><td>${new Date(s.started_at).toLocaleString()}</td><td>${s.ended_at ? new Date(s.ended_at).toLocaleString() : 'Open'}</td><td>${formatCurrency(s.cash_taken)}</td><td>${formatCurrency(s.mpesa_taken)}</td><td>${s.closing_cash == null ? '—' : formatCurrency(s.closing_cash)}</td><td>${s.status}</td></tr>`).join('');
+            } catch (err) { console.error(err); }
+        }
+        async function assignCashierShift() {
+            try {
+                await apiFetch('/shifts/admin-start', { method: 'POST', body: JSON.stringify({ cashier_id: document.getElementById('adminCashier').value, shift_period: document.getElementById('adminShiftPeriod').value, opening_cash: document.getElementById('adminOpeningCash').value }) });
+                await loadShifts();
+                alert('Cashier shift assigned.');
+            } catch (err) { alert(err.message); }
+        }
+        async function loadShifts() {
+            try {
+                const res = await apiFetch('/shifts');
+                shifts = res.data || [];
+                document.getElementById('shiftsBody').innerHTML = shifts.map(s => `<tr><td>${s.cashier_name}</td><td>${s.shift_name}</td><td>${new Date(s.started_at).toLocaleString()}</td><td>${s.ended_at ? new Date(s.ended_at).toLocaleString() : 'Open'}</td><td>${formatCurrency(s.cash_taken)}</td><td>${formatCurrency(s.mpesa_taken)}</td><td>${s.closing_cash == null ? '—' : formatCurrency(s.closing_cash)}</td><td>${s.status}</td></tr>`).join('');
+            } catch (err) { console.error(err); }
+        }
+
         async function markAttendance(worker_id, status) {
             const date = document.getElementById('attendanceDate').value;
             try {
                 await apiFetch('/workers/attendance', {
                     method: 'POST',
-                    body: JSON.stringify({ worker_id, date, status })
+                    body: JSON.stringify({ worker_id, date, status, shift_period: document.getElementById(`period-${worker_id}`)?.value || null })
                 });
                 loadAttendance();
             } catch (err) { alert(err.message); }
@@ -548,6 +596,7 @@
         }
 
         loadWorkers();
+        loadShifts();
         checkPendingPayments();
         setInterval(checkPendingPayments, 30000);
 

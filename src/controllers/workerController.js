@@ -121,11 +121,12 @@ exports.recordWorkerPayment = async (req, res) => {
     }
 };
 exports.markAttendance = async (req, res) => {
-    const { worker_id, date, status } = req.body;
+    const { worker_id, date, status, shift_id, shift_period } = req.body;
+    const period = ['morning', 'evening'].includes(String(shift_period).toLowerCase()) ? String(shift_period).toLowerCase() : null;
     try {
         await db.execute(
-            'INSERT INTO attendance (worker_id, date, status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE status = ?',
-            [worker_id, date, status, status]
+            'INSERT INTO attendance (worker_id, date, shift_id, shift_period, status) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE shift_id = ?, shift_period = ?, status = ?',
+            [worker_id, date, shift_id || null, period, status, shift_id || null, period, status]
         );
         res.json({ success: true, message: 'Attendance marked' });
     } catch (err) {
@@ -138,7 +139,7 @@ exports.getAttendance = async (req, res) => {
     const { date } = req.query;
     try {
         const [rows] = await db.execute(
-            'SELECT a.status, w.name as worker_name, w.id as worker_id, w.role FROM workers w LEFT JOIN attendance a ON a.worker_id = w.id AND a.date = ? WHERE w.status = "active"',
+            'SELECT a.status, a.shift_id, a.shift_period, s.shift_name, w.name as worker_name, w.id as worker_id, w.role FROM workers w LEFT JOIN attendance a ON a.worker_id = w.id AND a.date = ? LEFT JOIN shifts s ON s.id = a.shift_id WHERE w.status = "active"',
             [date]
         );
         res.json({ success: true, data: rows });

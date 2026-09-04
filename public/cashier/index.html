@@ -41,6 +41,13 @@
                 </div>
             </div>
 
+            <div class="glass-card" style="margin-bottom: 1.5rem;" id="shiftPanel">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <div><h3 id="shiftStatus" style="margin:0; color:#fff;">Shift not started</h3><p id="shiftTotals" class="card-small" style="margin:0.25rem 0 0; color:rgba(255,255,255,0.8);"></p></div>
+                    <div id="shiftActions" style="display:flex; gap:0.5rem; flex-wrap:wrap;"></div>
+                </div>
+            </div>
+
             <div class="order-grid">
                 <div class="glass-card">
                     <div class="category-filters" id="categoryFilters"></div>
@@ -786,8 +793,43 @@
             } catch (err) { console.error(err); }
         }
 
+        async function loadShift() {
+            try {
+                const res = await apiFetch('/shifts/current');
+                const shift = res.data;
+                const status = document.getElementById('shiftStatus');
+                const totals = document.getElementById('shiftTotals');
+                const actions = document.getElementById('shiftActions');
+                if (shift) {
+                    status.textContent = `${shift.shift_name} shift open`;
+                    totals.textContent = `Started ${new Date(shift.started_at).toLocaleString()} · Opening cash ${formatCurrency(shift.opening_cash)}`;
+                    actions.innerHTML = '<button class="btn btn-primary" onclick="closeShift()"><i class="fas fa-lock"></i> Close Shift</button>';
+                } else {
+                    status.textContent = 'Shift not started';
+                    totals.textContent = 'Start a shift before recording sales.';
+                    actions.innerHTML = '<button class="btn btn-success" onclick="startShift()"><i class="fas fa-play"></i> Start Shift</button>';
+                    document.getElementById('checkoutBtn').disabled = true;
+                }
+            } catch (err) { console.error(err); }
+        }
+        async function startShift() {
+            const opening = prompt('Opening cash (KES):', '0');
+            if (opening === null) return;
+            const period = prompt('Shift period (morning/evening):', 'morning');
+            if (!period) return;
+            try { await apiFetch('/shifts/start', { method: 'POST', body: JSON.stringify({ shift_name: period, shift_period: period.toLowerCase(), opening_cash: opening }) }); loadShift(); }
+            catch (err) { alert(err.message); }
+        }
+        async function closeShift() {
+            const closing = prompt('Closing cash in drawer (KES):');
+            if (closing === null) return;
+            try { await apiFetch('/shifts/close', { method: 'POST', body: JSON.stringify({ closing_cash: closing }) }); loadShift(); alert('Shift closed.'); }
+            catch (err) { alert(err.message); }
+        }
+
         socket.on('order_update', () => {
             checkBadges();
+            loadShift();
         });
 
         setPaymentMethod('mpesa_offline');
