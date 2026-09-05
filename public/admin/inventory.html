@@ -188,15 +188,15 @@
                     <label id="restockItemName" style="font-weight: 600; margin-bottom: 1rem; display: block;"></label>
                 </div>
                 <div class="form-group">
-                    <label>Quantity to Add</label>
-                    <input type="number" id="restockQty" class="form-control" required step="0.01">
+                    <label id="restockQtyLabel">Quantity to Add</label>
+                    <input type="number" id="restockQty" class="form-control" required step="0.01" min="0">
                 </div>
                 <div class="form-group">
                     <label>Reason</label>
                     <select id="restockReason" class="form-control">
                         <option value="Restock - Purchase">Restock - Purchase</option>
                         <option value="Restock - Return">Restock - Return</option>
-                        <option value="Adjustment">Adjustment</option>
+                        <option value="Adjustment">Set Actual Quantity</option>
                     </select>
                 </div>
                 <div style="display: flex; gap: 1rem; justify-content: flex-end;">
@@ -335,8 +335,13 @@
             const item = inventory.find(i => i.id === id);
             document.getElementById('restockItemId').value = id;
             document.getElementById('restockItemName').textContent = `Adding stock for: ${item.name}`;
+            document.getElementById('restockQtyLabel').textContent = 'Quantity to Add';
             document.getElementById('restockModal').style.display = 'flex';
         }
+
+        document.getElementById('restockReason').onchange = (e) => {
+            document.getElementById('restockQtyLabel').textContent = e.target.value === 'Adjustment' ? 'Actual Quantity in Store' : 'Quantity to Add';
+        };
 
         document.getElementById('restockForm').onsubmit = async (e) => {
             e.preventDefault();

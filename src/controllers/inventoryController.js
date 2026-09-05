@@ -264,32 +264,35 @@ exports.restockItem = async (req, res) => {
     let conn;
     try {
         const qtyNum = parseFloat(quantity);
-        if (isNaN(qtyNum) || qtyNum <= 0) {
+        const isAdjustment = reason === 'Adjustment' || reason === 'Stock Taking Adjustment';
+        if (isNaN(qtyNum) || qtyNum < 0 || (!isAdjustment && qtyNum === 0)) {
             return res.status(400).json({ success: false, message: 'Invalid quantity' });
         }
 
         conn = await db.getConnection();
         await conn.beginTransaction();
 
-        const [itemRows] = await conn.execute('SELECT name, cost_price, unit FROM inventory WHERE id = ? FOR UPDATE', [id]);
+        const [itemRows] = await conn.execute('SELECT name, cost_price, unit, quantity FROM inventory WHERE id = ? FOR UPDATE', [id]);
         if (itemRows.length === 0) {
             await conn.rollback();
             return res.status(404).json({ success: false, message: 'Item not found' });
         }
         const item = itemRows[0];
+        const currentQty = Number(item.quantity) || 0;
+        const changeAmount = isAdjustment ? qtyNum - currentQty : qtyNum;
 
         await conn.execute(
-            'UPDATE inventory SET quantity = quantity + ? WHERE id = ?',
-            [qtyNum, id]
+            isAdjustment ? 'UPDATE inventory SET quantity = ? WHERE id = ?' : 'UPDATE inventory SET quantity = quantity + ? WHERE id = ?',
+            [isAdjustment ? qtyNum : qtyNum, id]
         );
         
         await conn.execute(
             'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
-            [id, req.user.id, qtyNum, reason || 'Restock']
+            [id, req.user.id, changeAmount, reason || 'Restock']
         );
 
         const costVal = Number(item.cost_price) || 0;
-        if (costVal > 0) {
+        if (!isAdjustment && costVal > 0) {
             const totalCost = qtyNum * costVal;
             await conn.execute(
                 'INSERT INTO expenses (description, category, amount, expense_date, created_by) VALUES (?, ?, ?, CURRENT_DATE(), ?)',
@@ -305,7 +308,7 @@ exports.restockItem = async (req, res) => {
             io.emit('expense_update');
         }
 
-        res.json({ success: true, message: 'Stock updated successfully' });
+        res.json({ success: true, message: isAdjustment ? `Stock adjusted to ${qtyNum} ${item.unit || 'pcs'}` : 'Stock updated successfully' });
     } catch (err) {
         if (conn) await conn.rollback();
         console.error(err);

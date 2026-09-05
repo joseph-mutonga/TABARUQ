@@ -273,15 +273,15 @@
                     <label id="restockItemName" style="font-weight: 700; font-size: 1.1rem; color: #fff; margin-bottom: 1rem; display: block;"></label>
                 </div>
                 <div class="form-group">
-                    <label>Quantity to Add</label>
-                    <input type="number" id="restockQty" class="form-control" required step="0.01" min="0.01" placeholder="Enter amount">
+                    <label id="restockQtyLabel">Quantity to Add</label>
+                    <input type="number" id="restockQty" class="form-control" required step="0.01" min="0" placeholder="Enter amount">
                 </div>
                 <div class="form-group">
                     <label>Reason</label>
                     <select id="restockReason" class="form-control">
                         <option value="Purchase / Restock">Purchase / Restock</option>
                         <option value="Supplier Return">Supplier Return</option>
-                        <option value="Stock Taking Adjustment">Stock Taking Adjustment</option>
+                        <option value="Stock Taking Adjustment">Set Actual Quantity</option>
                     </select>
                 </div>
                 <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
@@ -587,8 +587,13 @@
             document.getElementById('restockItemId').value = id;
             document.getElementById('restockItemName').textContent = `${item.name} (Current: ${item.quantity} ${item.unit})`;
             document.getElementById('restockQty').value = '';
+            document.getElementById('restockQtyLabel').textContent = 'Quantity to Add';
             document.getElementById('restockModal').style.display = 'flex';
         }
+
+        document.getElementById('restockReason').onchange = (e) => {
+            document.getElementById('restockQtyLabel').textContent = e.target.value === 'Stock Taking Adjustment' ? 'Actual Quantity in Store' : 'Quantity to Add';
+        };
 
         document.getElementById('restockForm').onsubmit = async (e) => {
             e.preventDefault();
