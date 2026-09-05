@@ -523,7 +523,7 @@ exports.getPendingCount = async (req, res) => {
 exports.getPaymentById = async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await db.execute('SELECT p.*, o.total_amount FROM payments p LEFT JOIN orders o ON p.order_id = o.id WHERE p.id = ?', [id]);
+        const [rows] = await db.execute('SELECT p.*, o.total_amount, u.username AS confirmed_by_user FROM payments p LEFT JOIN orders o ON p.order_id = o.id LEFT JOIN users u ON p.confirmed_by = u.id WHERE p.id = ?', [id]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Payment not found' });
         res.json({ success: true, data: rows[0] });
     } catch (err) {
@@ -554,6 +554,34 @@ exports.processCashPayment = async (req, res) => {
         if (io) io.emit('order_update', { type: 'cash', orderId });
 
         res.json({ success: true, message: 'Cash payment processed successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.processBankPayment = async (req, res) => {
+    const { orderId, amount, transaction_id } = req.body;
+    const confirmationCode = String(transaction_id || '').trim();
+    if (!confirmationCode) {
+        return res.status(400).json({ success: false, message: 'Bank confirmation code is required' });
+    }
+
+    try {
+        await db.execute(
+            'INSERT INTO payments (order_id, shift_id, amount, transaction_id, payment_method, status, confirmed_at, confirmed_by) VALUES (?, (SELECT shift_id FROM orders WHERE id = ?), ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
+            [orderId, orderId, amount, confirmationCode, 'Bank', 'confirmed', req.user.id]
+        );
+
+        await db.execute(
+            'UPDATE orders SET payment_status = ?, status = ? WHERE id = ?',
+            ['paid', 'completed', orderId]
+        );
+
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'bank', orderId });
+
+        res.json({ success: true, message: 'Bank payment processed successfully' });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: 'Server error' });

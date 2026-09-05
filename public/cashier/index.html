@@ -95,6 +95,7 @@
                 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                     <button type="button" class="btn" id="mpesaOfflineTab" style="flex:1; min-width: 7rem; background: var(--accent-success);" onclick="setPaymentMethod('mpesa_offline')">M-Pesa offline</button>
                     <button type="button" class="btn" id="cashTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('cash')">Cash</button>
+                    <button type="button" class="btn" id="bankTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('bank')">Bank</button>
                     <button type="button" class="btn" id="platformTab" style="flex:1; min-width: 7rem; background: var(--card-bg);" onclick="setPaymentMethod('platform')">Platform (Uber/Bolt)</button>
                 </div>
             </div>
@@ -120,6 +121,13 @@
             </div>
             <div id="cashFields" style="display:none;">
                 <p style="color: var(--accent-success); margin-bottom: 1rem;"><i class="fas fa-check-circle"></i> Cash sales are recorded immediately.</p>
+            </div>
+            <div id="bankFields" style="display:none;">
+                <p style="color: var(--accent-success); margin-bottom: 1rem;"><i class="fas fa-university"></i> Bank payments are recorded immediately.</p>
+                <div class="form-group">
+                    <label>Bank confirmation code</label>
+                    <input type="text" id="bankConfirmationCode" class="form-control" placeholder="Enter bank confirmation code" autocomplete="off">
+                </div>
             </div>
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button class="btn" style="background: #64748b; color: white; font-weight: 700;" onclick="document.getElementById('checkoutModal').style.display='none'">Cancel</button>
@@ -516,16 +524,18 @@
             currentMethod = method;
             const offTab = document.getElementById('mpesaOfflineTab');
             const cashTab = document.getElementById('cashTab');
+            const bankTab = document.getElementById('bankTab');
             const platformTab = document.getElementById('platformTab');
             
             const offFields = document.getElementById('mpesaOfflineFields');
             const cashFields = document.getElementById('cashFields');
+            const bankFields = document.getElementById('bankFields');
             const platformFields = document.getElementById('platformFields');
             
             const btn = document.getElementById('processPaymentBtn');
 
-            [offTab, cashTab, platformTab].forEach(t => t.style.background = 'var(--card-bg)');
-            [offFields, cashFields, platformFields].forEach(f => f.style.display = 'none');
+            [offTab, cashTab, bankTab, platformTab].forEach(t => t.style.background = 'var(--card-bg)');
+            [offFields, cashFields, bankFields, platformFields].forEach(f => f.style.display = 'none');
 
             if (method === 'scheduled') {
                 document.getElementById('paymentMethodSection').style.display = 'none';
@@ -538,6 +548,10 @@
                 cashTab.style.background = 'var(--accent-success)';
                 cashFields.style.display = 'block';
                 btn.textContent = 'Complete Cash Sale';
+            } else if (method === 'bank') {
+                bankTab.style.background = 'var(--accent-success)';
+                bankFields.style.display = 'block';
+                btn.textContent = 'Complete Bank Sale';
             } else if (method === 'platform') {
                 platformTab.style.background = 'var(--accent-success)';
                 platformFields.style.display = 'block';
@@ -717,8 +731,14 @@
                 return acc + (price * item.quantity);
             }, 0);
             const customerName = document.getElementById('custName').value.trim();
+            const bankConfirmationCode = currentMethod === 'bank' ? document.getElementById('bankConfirmationCode').value.trim() : null;
             const platform = currentMethod === 'platform' ? document.getElementById('orderPlatform').value : 'none';
             const platform_order_id = currentMethod === 'platform' ? document.getElementById('platformOrderId').value : null;
+
+            if (currentMethod === 'bank' && !bankConfirmationCode) {
+                alert('Please enter the bank confirmation code.');
+                return;
+            }
 
             const isScheduled = document.getElementById('isScheduledCheckbox').checked;
             let scheduled_for = null;
@@ -753,6 +773,12 @@
                     await apiFetch('/payments/cash', {
                         method: 'POST',
                         body: JSON.stringify({ orderId: orderResp.orderId, amount: total })
+                    });
+                    showPostCheckoutModal(orderResp.orderId);
+                } else if (currentMethod === 'bank') {
+                    await apiFetch('/payments/bank', {
+                        method: 'POST',
+                        body: JSON.stringify({ orderId: orderResp.orderId, amount: total, transaction_id: bankConfirmationCode })
                     });
                     showPostCheckoutModal(orderResp.orderId);
                 } else if (currentMethod === 'platform') {

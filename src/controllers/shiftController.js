@@ -91,6 +91,7 @@ exports.getSummaries = async (req, res) => {
             SELECT s.id, s.shift_name, s.started_at, s.ended_at, s.status, s.opening_cash, s.closing_cash,
                    u.username AS cashier_name,
                    COALESCE(SUM(CASE WHEN p.payment_method = 'Cash' AND p.status = 'confirmed' THEN p.amount ELSE 0 END), 0) AS cash_taken,
+                   COALESCE(SUM(CASE WHEN p.payment_method = 'Bank' AND p.status = 'confirmed' THEN p.amount ELSE 0 END), 0) AS bank_taken,
                    COALESCE(SUM(CASE WHEN p.payment_method LIKE 'M-Pesa%' AND p.status = 'confirmed' THEN p.amount ELSE 0 END), 0) AS mpesa_taken,
                    COUNT(DISTINCT CASE WHEN p.status = 'confirmed' THEN p.id END) AS payment_count
             FROM shifts s

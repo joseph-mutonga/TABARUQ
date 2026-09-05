@@ -6,6 +6,7 @@ const { verifyToken, isCashier, isAdmin } = require('../middleware/auth');
 // Named routes MUST come before wildcard /:id routes
 router.post('/offline-mpesa', verifyToken, isCashier, paymentController.recordOfflineMpesa);
 router.post('/cash', verifyToken, isCashier, paymentController.processCashPayment);
+router.post('/bank', verifyToken, isCashier, paymentController.processBankPayment);
 router.get('/unlinked-incoming', verifyToken, isCashier, paymentController.getUnlinkedIncoming);
 router.get('/pending-count', verifyToken, isCashier, paymentController.getPendingCount);
 router.post('/apply-incoming-to-order', verifyToken, isCashier, paymentController.applyIncomingToOrder);

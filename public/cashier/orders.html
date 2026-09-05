@@ -44,6 +44,7 @@
                                 <th>Method</th>
                                 <th>Payment Phone</th>
                                 <th>M-Pesa Receipt</th>
+                                <th>Recorded By</th>
                                 <th>Status</th>
                                 <th>Time Completed</th>
                                 <th>Action</th>
@@ -81,6 +82,10 @@
                     <div class="info-item">
                         <label>Method:</label>
                         <span id="modalMethod">--</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Recorded By:</label>
+                        <span id="modalRecordedBy">--</span>
                     </div>
                     <div class="info-item" style="grid-column: span 2;">
                         <label>M-Pesa Receipt:</label>
@@ -216,6 +221,7 @@
             document.getElementById('modalAmount').textContent = formatCurrency(p.amount);
             document.getElementById('modalCustomerName').textContent = p.customer_name || '—';
             document.getElementById('modalMethod').textContent = p.payment_method || '—';
+            document.getElementById('modalRecordedBy').textContent = p.confirmed_by_user || '—';
             document.getElementById('modalReceipt').textContent = p.transaction_id || '—';
             document.getElementById('modalMessage').textContent = p.mpesa_result_message || '—';
 
@@ -426,18 +432,19 @@
                         <td>${p.customer_name || 'Guest'}</td>
                         <td style="min-width: 180px; max-width: 300px; white-space: normal; line-height: 1.35;">${p.items_summary ? escapeHtml(p.items_summary) : '<span style="color: #8a98a2;">No items linked</span>'}</td>
                         <td>${formatCurrency(p.amount)}</td>
-                        <td><span class="badge" style="background: ${p.payment_method === 'Cash' ? 'var(--primary)' : 'var(--accent-success)'}; white-space: nowrap;">${
+                        <td><span class="badge" style="background: ${p.payment_method === 'Cash' ? 'var(--primary)' : p.payment_method === 'Bank' ? '#2563eb' : 'var(--accent-success)'}; white-space: nowrap;">${
                             p.payment_method
                         }</span></td>
                         <td>${p.phone_number || '-'}</td>
-                        <td>${p.transaction_id || (p.payment_method === 'Cash' ? 'N/A' : '<span style="color: rgba(255,255,255,0.75)">Waiting...</span>')}</td>
+                        <td>${p.transaction_id || (p.payment_method === 'Cash' || p.payment_method === 'Bank' ? 'N/A' : '<span style="color: rgba(255,255,255,0.75)">Waiting...</span>')}</td>
+                        <td>${p.confirmed_by_user || '—'}</td>
                         <td><span style="color: ${p.status === 'confirmed' ? 'var(--accent-success)' : 'var(--accent-warning)'}">${p.status}</span></td>
                         <td>${p.confirmed_at ? new Date(p.confirmed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : (p.status === 'confirmed' ? new Date(p.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—')}</td>
                         <td style="white-space: nowrap;">
                             <div style="display: flex; gap: 0.4rem; align-items: center;">
                                 ${(() => {
                                     const orderTotal = p.total_amount != null ? Number(p.total_amount) : Number(p.amount);
-                                    const canAction = p.order_id && p.status !== 'confirmed' && p.payment_method !== 'Cash';
+                                    const canAction = p.order_id && p.status !== 'confirmed' && p.payment_method !== 'Cash' && p.payment_method !== 'Bank';
                                     
                                     let html = '';
                                     
@@ -451,6 +458,9 @@
                                     } else if (canAction) {
                                         // Cash Option
                                         html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); color: #fff;" onclick="event.stopPropagation();payWithCash(${p.order_id}, ${orderTotal})" title="Pay with Cash"><i class="fas fa-money-bill-wave"></i> Cash</button>`;
+
+                                        // Bank Option
+                                        html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #2563eb; color: #fff;" onclick="event.stopPropagation();payWithBank(${p.order_id}, ${orderTotal})" title="Pay by Bank"><i class="fas fa-university"></i> Bank</button>`;
                                         
                                         // Record Offline
                                         html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #475569; color: #fff;" onclick="event.stopPropagation();openIncomingMpesaModal(${p.order_id}, ${orderTotal})" title="Link Manual Receipt">Manual</button>`;
@@ -461,7 +471,7 @@
                                         html += `<button type="button" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--accent-danger); color: #fff; display: inline-flex; align-items: center; justify-content: center; margin-left: 0.2rem;" onclick="event.stopPropagation(); handleDeleteAction(${p.id ? p.id : 'null'}, ${p.order_id ? p.order_id : 'null'})" title="Cancel Order / Delete Payment"><i class="fas fa-trash"></i></button>`;
                                     }
                                     
-                                    if (p.status === 'confirmed' || p.payment_method === 'Cash') {
+                                    if (p.status === 'confirmed' || p.payment_method === 'Cash' || p.payment_method === 'Bank') {
                                         html += '<span style="color:var(--accent-success); font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap;"><i class="fas fa-check-circle"></i> Paid</span>';
                                     } else {
                                         html += '<span style="color: rgba(255,255,255,0.75); font-size: 0.85rem; white-space: nowrap;">Waiting...</span>';
@@ -520,6 +530,22 @@
                     loadData();
                 } catch (err) {
                     alert(`Cash payment failed: ${err.message}`);
+                }
+            }
+        }
+
+        async function payWithBank(orderId, amount) {
+            const transaction_id = prompt(`Enter the bank confirmation code for Order #${orderId}:`);
+            if (!transaction_id || !transaction_id.trim()) return;
+            if (confirm(`Mark Order #${orderId} as paid by Bank (KES ${amount})?`)) {
+                try {
+                    await apiFetch('/payments/bank', {
+                        method: 'POST',
+                        body: JSON.stringify({ orderId, amount, transaction_id: transaction_id.trim() })
+                    });
+                    loadData();
+                } catch (err) {
+                    alert(`Bank payment failed: ${err.message}`);
                 }
             }
         }
