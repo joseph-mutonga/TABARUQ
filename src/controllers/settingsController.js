@@ -119,7 +119,10 @@ exports.getDeductionRules = async (req, res) => {
                 sdr.stock_item_id,
                 s.name  AS stock_item_name,
                 s.unit  AS stock_item_unit,
-                sdr.deduct_qty
+                sdr.deduct_qty,
+                sdr.menu_items_per_stock_unit,
+                sdr.stock_qty_per_batch,
+                sdr.accumulated_menu_qty
             FROM stock_deduction_rules sdr
             JOIN inventory m ON m.id = sdr.menu_item_id
             JOIN inventory s ON s.id = sdr.stock_item_id
@@ -134,17 +137,15 @@ exports.getDeductionRules = async (req, res) => {
 
 /**
  * POST /api/settings/deduction-rules
- * Body: { menu_item_id, stock_item_id, deduct_qty }
+ * Body: { menu_item_id, stock_item_id, menu_items_per_stock_unit }
  * Creates or updates a deduction rule (upsert on the unique key).
  */
 exports.saveDeductionRule = async (req, res) => {
-    const { menu_item_id, stock_item_id, deduct_qty } = req.body;
+    const { menu_item_id, stock_item_id, menu_items_per_stock_unit } = req.body;
+    const menuItemsPerStockUnit = Number(menu_items_per_stock_unit);
 
-    if (!menu_item_id || !stock_item_id || !deduct_qty) {
-        return res.status(400).json({ success: false, message: 'menu_item_id, stock_item_id and deduct_qty are required' });
-    }
-    if (Number(deduct_qty) <= 0) {
-        return res.status(400).json({ success: false, message: 'deduct_qty must be greater than 0' });
+    if (!menu_item_id || !stock_item_id || !Number.isInteger(menuItemsPerStockUnit) || menuItemsPerStockUnit < 1) {
+        return res.status(400).json({ success: false, message: 'Menu item, stock item, and a whole number of sells are required' });
     }
     if (Number(menu_item_id) === Number(stock_item_id)) {
         return res.status(400).json({ success: false, message: 'Menu item and stock item cannot be the same' });
@@ -152,10 +153,10 @@ exports.saveDeductionRule = async (req, res) => {
 
     try {
         await db.execute(`
-            INSERT INTO stock_deduction_rules (menu_item_id, stock_item_id, deduct_qty)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE deduct_qty = VALUES(deduct_qty)
-        `, [menu_item_id, stock_item_id, deduct_qty]);
+            INSERT INTO stock_deduction_rules (menu_item_id, stock_item_id, deduct_qty, menu_items_per_stock_unit, stock_qty_per_batch, accumulated_menu_qty)
+            VALUES (?, ?, ?, ?, 1, 0)
+            ON DUPLICATE KEY UPDATE deduct_qty = VALUES(deduct_qty), menu_items_per_stock_unit = VALUES(menu_items_per_stock_unit), stock_qty_per_batch = 1, accumulated_menu_qty = 0
+        `, [menu_item_id, stock_item_id, 1 / menuItemsPerStockUnit, menuItemsPerStockUnit]);
 
         res.json({ success: true, message: 'Deduction rule saved' });
     } catch (err) {

@@ -457,7 +457,7 @@
                 const res = await apiFetch('/shifts');
                 shifts = res.data || [];
                 const usersRes = await apiFetch('/auth/users');
-                const cashiers = (usersRes.data || []).filter(user => user.role === 'cashier' && Number(user.is_active) === 1);
+                const cashiers = (usersRes.data || []).filter(user => String(user.role || '').toLowerCase() === 'cashier' && Number(user.is_active) === 1);
                 document.getElementById('adminCashier').innerHTML = cashiers.length ? cashiers.map(user => `<option value="${user.id}">${user.username}</option>`).join('') : '<option value="">No active cashiers</option>';
                 document.getElementById('shiftsBody').innerHTML = shifts.map(s => `<tr><td>${s.cashier_name}</td><td>${s.shift_period ? s.shift_period[0].toUpperCase() + s.shift_period.slice(1) : s.shift_name}</td><td>${new Date(s.started_at).toLocaleString()}</td><td>${s.ended_at ? new Date(s.ended_at).toLocaleString() : 'Open'}</td><td>${formatCurrency(s.cash_taken)}</td><td>${formatCurrency(s.mpesa_taken)}</td><td>${s.closing_cash == null ? '—' : formatCurrency(s.closing_cash)}</td><td>${s.status}</td></tr>`).join('');
             } catch (err) { console.error(err); }
@@ -469,14 +469,6 @@
                 alert('Cashier shift assigned.');
             } catch (err) { alert(err.message); }
         }
-        async function loadShifts() {
-            try {
-                const res = await apiFetch('/shifts');
-                shifts = res.data || [];
-                document.getElementById('shiftsBody').innerHTML = shifts.map(s => `<tr><td>${s.cashier_name}</td><td>${s.shift_name}</td><td>${new Date(s.started_at).toLocaleString()}</td><td>${s.ended_at ? new Date(s.ended_at).toLocaleString() : 'Open'}</td><td>${formatCurrency(s.cash_taken)}</td><td>${formatCurrency(s.mpesa_taken)}</td><td>${s.closing_cash == null ? '—' : formatCurrency(s.closing_cash)}</td><td>${s.status}</td></tr>`).join('');
-            } catch (err) { console.error(err); }
-        }
-
         async function markAttendance(worker_id, status) {
             const date = document.getElementById('attendanceDate').value;
             try {

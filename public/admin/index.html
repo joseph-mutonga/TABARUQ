@@ -67,14 +67,19 @@
             <div class="glass-card" style="margin: 1.5rem 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <div>
-                        <h3 style="margin: 0; color: #ffffff; font-weight: 800;">Today's Production Records</h3>
+                        <h3 style="margin: 0; color: #ffffff; font-weight: 800;">Production Records</h3>
                     </div>
-                    <button class="btn btn-primary" onclick="openProductionModalFromAdmin()">Record Production</button>
+                    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                        <select id="productionRange" class="form-control" style="width:110px;" onchange="loadProductionHistory()"><option value="day">Day</option><option value="week">Week</option></select>
+                        <input type="date" id="productionDate" class="form-control" style="width:155px;" onchange="loadProductionHistory()">
+                        <button class="btn btn-primary" onclick="openProductionModalFromAdmin()">Record Production</button>
+                    </div>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
+                                <th>Date</th>
                                 <th>Item</th>
                                 <th>Qty</th>
                                 <th>Unit</th>
@@ -296,6 +301,41 @@
             }
         }
 
+        function localDateString(date) {
+            return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        }
+
+        async function loadProductionHistory() {
+            const selectedDate = document.getElementById('productionDate').value;
+            const range = document.getElementById('productionRange').value;
+            if (!selectedDate) return;
+            let endpoint = `/inventory/production?date=${selectedDate}`;
+            if (range === 'week') {
+                const date = new Date(`${selectedDate}T00:00:00`);
+                const mondayOffset = date.getDay() === 0 ? -6 : 1 - date.getDay();
+                date.setDate(date.getDate() + mondayOffset);
+                const weekStart = localDateString(date);
+                date.setDate(date.getDate() + 6);
+                endpoint = `/inventory/production?from=${weekStart}&to=${localDateString(date)}`;
+            }
+            try {
+                const response = await apiFetch(endpoint);
+                const body = document.getElementById('todayProductionBody');
+                body.innerHTML = (response.data || []).map(record => `
+                    <tr>
+                        <td>${record.production_date ? new Date(record.production_date).toLocaleDateString() : '—'}</td>
+                        <td>${record.item_name || 'Produced Item'}</td>
+                        <td>${Number(record.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        <td>${record.unit || 'pcs'}</td>
+                        <td>${record.recorded_by_name || 'System'}</td>
+                        <td>${record.notes || 'Production'}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="6" style="text-align:center; color: rgba(255,255,255,0.7);">No production recorded for this period.</td></tr>';
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
         async function loadStats() {
             try {
                 const response = await apiFetch('/dashboard/stats');
@@ -314,13 +354,14 @@
                 const productionBody = document.getElementById('todayProductionBody');
                 productionBody.innerHTML = (data.todayProductionRecords || []).map(record => `
                     <tr>
+                        <td>${record.production_date ? new Date(record.production_date).toLocaleDateString() : '—'}</td>
                         <td>${record.item_name || 'Produced Item'}</td>
                         <td>${Number(record.quantity || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                         <td>${record.unit || 'pcs'}</td>
                         <td>${record.recorded_by_name || 'System'}</td>
                         <td>${record.notes || 'Production'}</td>
                     </tr>
-                `).join('') || '<tr><td colspan="5" style="text-align:center; color: rgba(255,255,255,0.7);">No production recorded today.</td></tr>';
+                `).join('') || '<tr><td colspan="6" style="text-align:center; color: rgba(255,255,255,0.7);">No production recorded for this period.</td></tr>';
 
                 document.getElementById('topProducts').innerHTML = data.topProducts.map((item, index) => `
                     <article class="product-card">
@@ -402,7 +443,9 @@
         }
 
 
+        document.getElementById('productionDate').value = localDateString(new Date());
         loadStats();
+        loadProductionHistory();
         checkPendingPayments();
         setInterval(checkPendingPayments, 30000);
     </script>

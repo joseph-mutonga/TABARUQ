@@ -75,6 +75,8 @@
             .outgoing-food-panel { align-items: stretch; flex-direction: column; gap: 1rem; }
             .outgoing-food-form { grid-template-columns: 1fr; }
             .outgoing-food-form .btn { width: 100%; justify-content: center; }
+            #deductionRuleForm { grid-template-columns: 1fr !important; }
+            #deductionRuleForm .btn { width: 100%; }
         }
     </style>
 </head>
@@ -164,6 +166,19 @@
                         <tbody id="stocksBody"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <div class="glass-card" style="margin-top:2rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; gap:1rem; flex-wrap:wrap;">
+                    <div><h3 style="color:#fff; margin:0;">Stock Deduction Rules</h3><p class="card-small" style="margin:0.35rem 0 0; color:rgba(255,255,255,0.72);">Choose how many menu items must be sold before 1 stock unit is deducted.</p></div>
+                </div>
+                <form id="deductionRuleForm" style="display:grid; grid-template-columns:1fr 1fr minmax(220px,0.9fr) auto; gap:0.75rem; align-items:end; margin-bottom:1.25rem;">
+                    <div class="form-group" style="margin:0;"><label>Menu Item</label><select id="ruleMenuItem" class="form-control" required></select></div>
+                    <div class="form-group" style="margin:0;"><label>Stock / Ingredient</label><select id="ruleStockItem" class="form-control" required></select></div>
+                    <div class="form-group" style="margin:0;"><label>Number of Sells Per 1 Stock Quantity</label><input id="ruleItemsPerUnit" class="form-control" type="number" min="1" step="1" required placeholder="e.g. 10"><small style="display:block; margin-top:0.35rem; color:rgba(255,255,255,0.68);">Enter 10 for 10 Chipos = 1 kg of Potatoes.</small></div>
+                    <button class="btn btn-primary" type="submit"><i class="fas fa-link"></i> Save Rule</button>
+                </form>
+                <div class="table-container"><table><thead><tr><th>Rule</th><th>Sells Per Stock Quantity</th><th>Progress</th><th>Action</th></tr></thead><tbody id="deductionRulesBody"></tbody></table></div>
             </div>
 
             <div class="glass-card" style="margin-top:2rem;">
@@ -317,17 +332,68 @@
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
         let ingredients = [];
+        let allInventory = [];
 
         async function loadStocks() {
             try {
                 const response = await apiFetch('/inventory');
+                allInventory = response.data || [];
                 // Filter specifically for ingredients
-                ingredients = response.data.filter(item => item.item_type === 'ingredient');
+                ingredients = allInventory.filter(item => item.item_type === 'ingredient');
                 populateOutgoingFoodItems(document.getElementById('outgoingFoodItem')?.value || '');
+                populateDeductionRuleItems();
                 renderStocks(ingredients);
+                loadDeductionRules();
             } catch (err) {
                 alert(err.message);
             }
+        }
+
+        function populateDeductionRuleItems() {
+            const menuSelect = document.getElementById('ruleMenuItem');
+            const stockSelect = document.getElementById('ruleStockItem');
+            if (!menuSelect || !stockSelect) return;
+            const optionHtml = (items, placeholder) => `<option value="">${placeholder}</option>` + items.map(item => `<option value="${item.id}">${item.name} (${item.unit || 'pcs'})</option>`).join('');
+            menuSelect.innerHTML = optionHtml(allInventory.filter(item => item.item_type !== 'ingredient'), 'Select menu item');
+            stockSelect.innerHTML = optionHtml(allInventory.filter(item => item.item_type === 'ingredient'), 'Select stock / ingredient');
+        }
+
+        async function loadDeductionRules() {
+            try {
+                const response = await apiFetch('/inventory/deduction-rules');
+                const body = document.getElementById('deductionRulesBody');
+                body.innerHTML = (response.data || []).map(rule => {
+                    const batchSize = Number(rule.menu_items_per_stock_unit) > 0 ? Number(rule.menu_items_per_stock_unit) : (Number(rule.deduct_qty) > 0 ? 1 / Number(rule.deduct_qty) : 0);
+                    const accumulated = Number(rule.accumulated_menu_qty) || 0;
+                    const stockUnit = rule.stock_unit || 'unit';
+                    return `<tr><td><strong>${rule.menu_item_name}</strong> <span style="color:var(--text-gray);">→</span> <strong>${rule.stock_item_name}</strong> (${stockUnit})</td><td>${batchSize.toLocaleString(undefined, { maximumFractionDigits: 4 })} sells = 1 ${stockUnit}</td><td>${accumulated.toLocaleString(undefined, { maximumFractionDigits: 4 })} / ${batchSize.toLocaleString(undefined, { maximumFractionDigits: 4 })} sells</td><td><button type="button" class="btn" style="padding:0.45rem 0.7rem; background:var(--accent-danger);" onclick="deleteDeductionRule(${rule.id})"><i class="fas fa-trash"></i></button></td></tr>`;
+                }).join('') || '<tr><td colspan="4" style="text-align:center; color:var(--text-gray); padding:1rem;">No stock deduction rules configured.</td></tr>';
+            } catch (err) { console.error(err); }
+        }
+
+        document.getElementById('deductionRuleForm').onsubmit = async (event) => {
+            event.preventDefault();
+            try {
+                await apiFetch('/inventory/deduction-rules', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        menu_item_id: document.getElementById('ruleMenuItem').value,
+                        stock_item_id: document.getElementById('ruleStockItem').value,
+                        menu_items_per_stock_unit: document.getElementById('ruleItemsPerUnit').value
+                    })
+                });
+                event.target.reset();
+                loadDeductionRules();
+                alert('Stock deduction rule saved.');
+            } catch (err) { alert(err.message); }
+        };
+
+        async function deleteDeductionRule(id) {
+            if (!confirm('Delete this stock deduction rule?')) return;
+            try {
+                await apiFetch(`/inventory/deduction-rules/${id}`, { method: 'DELETE' });
+                loadDeductionRules();
+            } catch (err) { alert(err.message); }
         }
 
         async function loadStockFlow() {

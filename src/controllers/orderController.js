@@ -9,9 +9,6 @@ exports.createOrder = async (req, res) => {
         await connection.beginTransaction();
 
         const shift = await getOpenShift(req.user.id, connection);
-        if (!shift) {
-            throw new Error('Open a cashier shift before creating orders');
-        }
 
         if (!Array.isArray(items) || items.length === 0) {
             throw new Error('An order must contain at least one item');
@@ -73,8 +70,8 @@ exports.createOrder = async (req, res) => {
         }
 
         const [orderResult] = await connection.execute(
-            'INSERT INTO orders (cashier_id, shift_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [req.user.id, shift.id, totalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
+            'INSERT INTO orders (cashier_id, shift_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [req.user.id, shift?.id || null, totalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
         );
         const orderId = orderResult.insertId;
 
@@ -151,12 +148,22 @@ exports.createOrder = async (req, res) => {
                 // ── 4. Apply Stock Deduction Rules ────────────────────────────
                 // e.g. selling "Chipo" also deducts 1 kg of "Viazi" from stock
                 const [deductionRules] = await connection.execute(
-                    'SELECT stock_item_id, deduct_qty FROM stock_deduction_rules WHERE menu_item_id = ?',
+                    'SELECT id, stock_item_id, deduct_qty, menu_items_per_stock_unit, stock_qty_per_batch, accumulated_menu_qty FROM stock_deduction_rules WHERE menu_item_id = ? FOR UPDATE',
                     [item.id]
                 );
                 for (const rule of deductionRules) {
                     stockItemIds.add(Number(rule.stock_item_id));
-                    const totalDeduct = parseFloat(rule.deduct_qty) * item.quantity;
+                    const batchSize = Number(rule.menu_items_per_stock_unit) > 0 ? Number(rule.menu_items_per_stock_unit) : 1 / Number(rule.deduct_qty);
+                    const stockPerBatch = Number(rule.stock_qty_per_batch) > 0 ? Number(rule.stock_qty_per_batch) : 1;
+                    const accumulated = Number(rule.accumulated_menu_qty) || 0;
+                    const menuQuantityTotal = accumulated + Number(item.quantity);
+                    const batches = Math.floor((menuQuantityTotal + 0.0000001) / batchSize);
+                    const totalDeduct = batches * stockPerBatch;
+                    const remainder = menuQuantityTotal - (batches * batchSize);
+                    await connection.execute('UPDATE stock_deduction_rules SET accumulated_menu_qty = ? WHERE id = ?', [remainder, rule.id]);
+                    if (totalDeduct <= 0) {
+                        continue;
+                    }
                     const [stockUpdate] = await connection.execute(
                         'UPDATE inventory SET quantity = quantity - ? WHERE id = ?',
                         [totalDeduct, rule.stock_item_id]
@@ -241,11 +248,7 @@ exports.createOrder = async (req, res) => {
     } catch (err) {
         await connection.rollback();
         console.error('ERROR IN CREATE_ORDER:', err);
-        const requiresShift = err.message === 'Open a cashier shift before creating orders';
-        res.status(requiresShift ? 400 : 500).json({
-            success: false,
-            message: requiresShift ? err.message : 'Server error: ' + err.message
-        });
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
     } finally {
         connection.release();
     }
@@ -254,7 +257,7 @@ exports.createOrder = async (req, res) => {
 exports.getOrders = async (req, res) => {
     try {
         const [rows] = await db.execute(`
-            SELECT o.*, COALESCE(u.username, o.platform, 'Delivery') as cashier_name 
+            SELECT o.*, COALESCE(u.username, o.platform, 'Delivery') as cashier_name
             FROM orders o 
             LEFT JOIN users u ON o.cashier_id = u.id 
             WHERE o.status != 'merged' AND o.platform IS NULL
@@ -338,7 +341,9 @@ exports.updateOrderStatus = async (req, res) => {
 exports.getScheduledOrders = async (req, res) => {
     try {
         const [rows] = await db.execute(`
-            SELECT o.*, COALESCE(u.username, o.platform, 'Delivery') as cashier_name 
+            SELECT o.*, COALESCE(u.username, o.platform, 'Delivery') as cashier_name,
+                (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', COALESCE(oi.item_name, i.name, 'Item')) SEPARATOR ', ')
+                 FROM order_items oi LEFT JOIN inventory i ON i.id = oi.item_id WHERE oi.order_id = o.id) AS items_summary
             FROM orders o 
             LEFT JOIN users u ON o.cashier_id = u.id 
             WHERE o.status != 'merged' AND o.status != 'cancelled' AND o.scheduled_for > NOW() AND o.scheduled_released = 0

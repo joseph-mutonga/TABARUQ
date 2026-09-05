@@ -806,9 +806,8 @@
                     actions.innerHTML = '<button class="btn btn-primary" onclick="closeShift()"><i class="fas fa-lock"></i> Close Shift</button>';
                 } else {
                     status.textContent = 'Shift not started';
-                    totals.textContent = 'Start a shift before recording sales.';
+                    totals.textContent = 'Shift tracking is optional. You can record sales without opening a shift.';
                     actions.innerHTML = '<button class="btn btn-success" onclick="startShift()"><i class="fas fa-play"></i> Start Shift</button>';
-                    document.getElementById('checkoutBtn').disabled = true;
                 }
             } catch (err) { console.error(err); }
         }

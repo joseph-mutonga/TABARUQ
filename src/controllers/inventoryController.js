@@ -9,6 +9,60 @@ exports.getItems = async (req, res) => {
     }
 };
 
+exports.getDeductionRules = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT r.id, r.menu_item_id, r.stock_item_id, r.deduct_qty, r.menu_items_per_stock_unit, r.stock_qty_per_batch, r.accumulated_menu_qty,
+                   menu.name AS menu_item_name, stock.name AS stock_item_name, stock.unit AS stock_unit
+            FROM stock_deduction_rules r
+            JOIN inventory menu ON menu.id = r.menu_item_id
+            JOIN inventory stock ON stock.id = r.stock_item_id
+            ORDER BY menu.name, stock.name
+        `);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('getDeductionRules Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.saveDeductionRule = async (req, res) => {
+    const menuItemId = Number(req.body.menu_item_id);
+    const stockItemId = Number(req.body.stock_item_id);
+    const menuItemsPerStockUnit = Number(req.body.menu_items_per_stock_unit);
+    if (!Number.isInteger(menuItemId) || !Number.isInteger(stockItemId) || menuItemId <= 0 || stockItemId <= 0 ||
+        !Number.isInteger(menuItemsPerStockUnit) || menuItemsPerStockUnit < 1) {
+        return res.status(400).json({ success: false, message: 'Choose valid items and enter a menu item count greater than zero' });
+    }
+    if (menuItemId === stockItemId) {
+        return res.status(400).json({ success: false, message: 'Menu item and stock item must be different' });
+    }
+    try {
+        const [items] = await db.execute('SELECT id FROM inventory WHERE id IN (?, ?)', [menuItemId, stockItemId]);
+        if (items.length !== 2) return res.status(404).json({ success: false, message: 'Selected item not found' });
+        const deductQty = 1 / menuItemsPerStockUnit;
+        await db.execute(
+            `INSERT INTO stock_deduction_rules (menu_item_id, stock_item_id, deduct_qty, menu_items_per_stock_unit, stock_qty_per_batch, accumulated_menu_qty) VALUES (?, ?, ?, ?, 1, 0)
+             ON DUPLICATE KEY UPDATE deduct_qty = VALUES(deduct_qty), menu_items_per_stock_unit = VALUES(menu_items_per_stock_unit), stock_qty_per_batch = 1, accumulated_menu_qty = 0`,
+            [menuItemId, stockItemId, deductQty, menuItemsPerStockUnit]
+        );
+        res.json({ success: true, message: 'Stock deduction rule saved' });
+    } catch (err) {
+        console.error('saveDeductionRule Error:', err);
+        res.status(500).json({ success: false, message: 'Could not save stock deduction rule' });
+    }
+};
+
+exports.deleteDeductionRule = async (req, res) => {
+    try {
+        await db.execute('DELETE FROM stock_deduction_rules WHERE id = ?', [req.params.id]);
+        res.json({ success: true, message: 'Stock deduction rule deleted' });
+    } catch (err) {
+        console.error('deleteDeductionRule Error:', err);
+        res.status(500).json({ success: false, message: 'Could not delete stock deduction rule' });
+    }
+};
+
 exports.getStockFlow = async (req, res) => {
     try {
         const [rows] = await db.execute(`
@@ -95,14 +149,28 @@ exports.recordProduction = async (req, res) => {
 
 exports.getProductionRecords = async (req, res) => {
     try {
+        const isDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+        const date = isDate(req.query.date) ? req.query.date : null;
+        const from = isDate(req.query.from) ? req.query.from : null;
+        const to = isDate(req.query.to) ? req.query.to : null;
+        let where = 'pr.production_date = CURDATE()';
+        let params = [];
+        if (date) {
+            where = 'pr.production_date = ?';
+            params = [date];
+        } else if (from && to) {
+            where = 'pr.production_date BETWEEN ? AND ?';
+            params = [from, to];
+        }
         const [rows] = await db.execute(`
             SELECT pr.*, u.username AS recorded_by_name
             FROM production_records pr
             LEFT JOIN users u ON u.id = pr.recorded_by
-            WHERE pr.production_date = CURDATE()
-            ORDER BY pr.created_at DESC
-        `);
-        res.json({ success: true, data: rows });
+            WHERE ${where}
+            ORDER BY pr.production_date DESC, pr.created_at DESC
+        `, params);
+        const total = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+        res.json({ success: true, data: rows, total, from: from || date || null, to: to || date || null });
     } catch (err) {
         console.error('getProductionRecords Error:', err);
         res.status(500).json({ success: false, message: 'Server error' });

@@ -128,7 +128,7 @@
                         <h3 style="color:#ffffff; font-weight:800; margin:0;"><i class="fas fa-link"></i> Stock Deduction Rules</h3>
                         <p class="card-small" style="color:var(--text-gray); margin-top:0.3rem;">
                             When a menu item is sold, the linked stock item is automatically deducted.<br>
-                            <em style="color:rgba(255,255,255,0.5); font-size:0.82rem;">Example: Sell 1&times; Chipo &rarr; deduct 1 kg Viazi from stock.</em>
+                            <em style="color:rgba(255,255,255,0.5); font-size:0.82rem;">Example: Sell 10 Chipos &rarr; deduct 1 kg Potatoes from stock.</em>
                         </p>
                     </div>
                     <button class="btn btn-primary" id="addRuleBtn" style="white-space:nowrap;"><i class="fas fa-plus"></i> Add Rule</button>
@@ -150,8 +150,8 @@
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label style="color:var(--text-gray); font-size:0.85rem; font-weight:500;">Qty per Sale</label>
-                            <input type="number" id="ruleDeductQty" class="form-control" min="0.001" step="0.001" placeholder="e.g. 1" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                            <label style="color:var(--text-gray); font-size:0.85rem; font-weight:500;">Number of Sells Per 1 Stock Quantity</label>
+                            <input type="number" id="ruleItemsPerUnit" class="form-control" min="1" step="1" placeholder="e.g. 10" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
                         </div>
                         <div style="display:flex; gap:0.5rem;">
                             <button class="btn btn-primary" id="saveRuleBtn" style="padding:0.55rem 1rem;"><i class="fas fa-save"></i> Save</button>
@@ -168,7 +168,7 @@
                                 <th>Menu Item Sold</th>
                                 <th style="text-align:center;"><i class="fas fa-arrow-right" style="opacity:.5;"></i></th>
                                 <th>Stock Item Deducted</th>
-                                <th>Qty per Sale</th>
+                                <th>Sells Per Stock Quantity</th>
                                 <th style="text-align:center;">Action</th>
                             </tr>
                         </thead>
@@ -387,15 +387,29 @@
                     <td style="text-align:center; color:var(--primary,#6366f1);"><i class="fas fa-arrow-right"></i></td>
                     <td><strong style="color:#a5b4fc;">${r.stock_item_name}</strong> <span style="color:var(--text-gray); font-size:0.8rem;">(${r.stock_item_unit || 'pcs'})</span></td>
                     <td><span style="background:rgba(99,102,241,0.18); color:#a5b4fc; border-radius:0.4rem; padding:0.2rem 0.6rem; font-weight:600;">
-                        ${parseFloat(r.deduct_qty)} ${r.stock_item_unit || 'pcs'}
+                        ${Number(r.menu_items_per_stock_unit || (1 / Number(r.deduct_qty || 1))).toLocaleString(undefined, { maximumFractionDigits: 4 })} sells = 1 ${r.stock_item_unit || 'unit'}
                     </span></td>
                     <td style="text-align:center;">
+                        <button onclick="editRule(${r.id})" class="btn" style="background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.25); padding:0.35rem 0.8rem; font-size:0.82rem;">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <button onclick="deleteRule(${r.id})" class="btn" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.25); padding:0.35rem 0.8rem; font-size:0.82rem;">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function editRule(ruleId) {
+            const rule = deductionRules.find(item => Number(item.id) === Number(ruleId));
+            if (!rule) return;
+            const form = document.getElementById('addRuleForm');
+            form.style.display = 'block';
+            populateDropdown(document.getElementById('ruleMenuItemId'), allItems, rule.menu_item_id);
+            populateDropdown(document.getElementById('ruleStockItemId'), allItems, rule.stock_item_id);
+            document.getElementById('ruleItemsPerUnit').value = Math.round(Number(rule.menu_items_per_stock_unit || (1 / Number(rule.deduct_qty || 1))));
+            document.getElementById('ruleMenuItemId').focus();
         }
 
         // Show / hide add-rule inline form
@@ -413,15 +427,15 @@
             document.getElementById('addRuleForm').style.display = 'none';
             document.getElementById('ruleMenuItemId').value = '';
             document.getElementById('ruleStockItemId').value = '';
-            document.getElementById('ruleDeductQty').value = '';
+            document.getElementById('ruleItemsPerUnit').value = '';
         };
 
         document.getElementById('saveRuleBtn').onclick = async () => {
             const menu_item_id = document.getElementById('ruleMenuItemId').value;
             const stock_item_id = document.getElementById('ruleStockItemId').value;
-            const deduct_qty = document.getElementById('ruleDeductQty').value;
+            const menu_items_per_stock_unit = document.getElementById('ruleItemsPerUnit').value;
 
-            if (!menu_item_id || !stock_item_id || !deduct_qty) {
+            if (!menu_item_id || !stock_item_id || !menu_items_per_stock_unit) {
                 showToast('Please fill in all fields', 'error'); return;
             }
             if (menu_item_id === stock_item_id) {
@@ -430,7 +444,7 @@
             try {
                 await apiFetch('/settings/deduction-rules', {
                     method: 'POST',
-                    body: JSON.stringify({ menu_item_id, stock_item_id, deduct_qty })
+                    body: JSON.stringify({ menu_item_id, stock_item_id, menu_items_per_stock_unit })
                 });
                 showToast('Deduction rule saved!', 'success');
                 document.getElementById('cancelRuleBtn').click();

@@ -4,7 +4,7 @@ const db = require('../src/config/db');
 
 async function migrate() {
     try {
-        const migrationFiles = ['006_add_shifts_and_shift_tracking.sql', '007_add_shift_period.sql'];
+        const migrationFiles = ['006_add_shifts_and_shift_tracking.sql', '007_add_shift_period.sql', '008_backfill_payment_shift_ids.sql', '009_batch_stock_deduction_rules.sql'];
         for (const file of migrationFiles) {
             console.log(`Running ${file}...`);
             const sql = fs.readFileSync(path.join(__dirname, '../migrations', file), 'utf8');

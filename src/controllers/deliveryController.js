@@ -258,6 +258,30 @@ exports.recordSettlement = async (req, res) => {
     }
 };
 
+exports.getSettlements = async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT s.id, s.platform, s.payout_id, s.amount, s.date_received, s.status,
+                   s.attachment_name, s.attachment_data,
+                   COUNT(DISTINCT os.order_id) AS order_count,
+                   COALESCE(GROUP_CONCAT(DISTINCT CONCAT('#', o.id, ' · ',
+                       COALESCE((SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', COALESCE(oi.item_name, i.name, 'Food')) SEPARATOR ', ')
+                                FROM order_items oi LEFT JOIN inventory i ON i.id = oi.item_id WHERE oi.order_id = o.id),
+                       'Food details unavailable')) ORDER BY o.created_at SEPARATOR ' | '), 'No orders linked') AS delivered_food
+            FROM settlements s
+            LEFT JOIN order_settlements os ON os.settlement_id = s.id
+            LEFT JOIN orders o ON o.id = os.order_id
+            GROUP BY s.id
+            ORDER BY s.date_received DESC, s.id DESC
+            LIMIT 200
+        `);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('getSettlements Error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 exports.getReconciliationReport = async (req, res) => {
     try {
         // Total orders vs Settled amount
@@ -268,7 +292,7 @@ exports.getReconciliationReport = async (req, res) => {
                 COUNT(o.id) as total_orders,
                 COALESCE(SUM(o.total_amount), 0) as gross_revenue,
                 COUNT(CASE WHEN YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1) THEN o.id END) as weekly_orders,
-                COALESCE(SUM(CASE WHEN YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1) THEN o.total_amount ELSE 0 END), 0) as weekly_revenue,
+                COALESCE(SUM(CASE WHEN YEARWEEK(o.created_at, 1) = YEARWEEK(CURDATE(), 1) THEN o.total_amount - COALESCE((SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = o.id), 0) ELSE 0 END), 0) as weekly_revenue,
                 COALESCE(SUM(CASE WHEN o.payment_status = 'paid' THEN 
                     COALESCE(
                         (SELECT SUM(p.amount) FROM payments p WHERE p.order_id = o.id AND p.status = 'confirmed'),
@@ -278,7 +302,7 @@ exports.getReconciliationReport = async (req, res) => {
                 COALESCE(SUM(
                     (SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = o.id)
                 ), 0) as commission_fees,
-                COALESCE(SUM(CASE WHEN o.payment_status != 'paid' THEN o.total_amount ELSE 0 END), 0) as pending_revenue
+                COALESCE(SUM(CASE WHEN o.payment_status != 'paid' THEN o.total_amount - COALESCE((SELECT SUM(pf2.fee_amount) FROM platform_fees pf2 WHERE pf2.order_id = o.id), 0) ELSE 0 END), 0) as pending_revenue
             FROM platform_commissions pc
             LEFT JOIN orders o ON o.platform = pc.platform
             GROUP BY pc.platform, pc.commission_percentage
@@ -332,6 +356,8 @@ exports.getDeliveryOrders = async (req, res) => {
     const { status, period, platform } = req.query;
     try {
         let query = `SELECT o.*, u.username as cashier_name,
+            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.order_id = o.id AND p.status = 'confirmed'), 0) AS paid_amount,
+            (SELECT MAX(p.confirmed_at) FROM payments p WHERE p.order_id = o.id AND p.status = 'confirmed') AS paid_at,
             (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', COALESCE(oi.item_name, i.name, 'Food')) SEPARATOR ', ')
              FROM order_items oi LEFT JOIN inventory i ON i.id = oi.item_id
              WHERE oi.order_id = o.id) AS delivered_food
@@ -374,19 +400,19 @@ exports.getDeliveryOrders = async (req, res) => {
 exports.getDeliveryStats = async (req, res) => {
     try {
         const [daily] = await db.execute(`
-            SELECT SUM(total_amount) as total, COUNT(id) as count 
+            SELECT COALESCE(SUM(total_amount - COALESCE((SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = orders.id), 0)), 0) as total, COUNT(id) as count 
             FROM orders 
             WHERE platform IS NOT NULL AND DATE(created_at) = CURDATE()
         `);
 
         const [weekly] = await db.execute(`
-            SELECT SUM(total_amount) as total, COUNT(id) as count 
+            SELECT COALESCE(SUM(total_amount - COALESCE((SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = orders.id), 0)), 0) as total, COUNT(id) as count 
             FROM orders 
             WHERE platform IS NOT NULL AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
         `);
 
         const [monthly] = await db.execute(`
-            SELECT SUM(total_amount) as total, COUNT(id) as count 
+            SELECT COALESCE(SUM(total_amount - COALESCE((SELECT SUM(pf.fee_amount) FROM platform_fees pf WHERE pf.order_id = orders.id), 0)), 0) as total, COUNT(id) as count 
             FROM orders 
             WHERE platform IS NOT NULL AND MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())
         `);

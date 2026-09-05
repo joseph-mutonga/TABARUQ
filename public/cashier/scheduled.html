@@ -38,8 +38,14 @@
         }
         .items-summary {
             font-size: 0.85rem;
-            color: rgba(255,255,255,0.7);
+            color: #243447 !important;
+            font-weight: 600;
             line-height: 1.4;
+            min-width: 170px;
+        }
+        .items-summary div {
+            border-bottom-color: #dbe4ea !important;
+            color: #243447 !important;
         }
         .table-container {
             max-height: 75vh;
@@ -182,8 +188,11 @@
 
                 const countdown = formatTimeRemaining(order.scheduled_for);
                 const itemsSummary = (order.items || [])
-                    .map(i => `${i.quantity}x ${i.name || i.item_name}`)
-                    .join('<br>');
+                    .map(i => {
+                        const itemName = i.name || i.item_name || 'Item';
+                        return `<div style="border-bottom:1px solid rgba(255,255,255,0.08); padding:0.2rem 0;"><strong>${i.quantity}x</strong> ${itemName}</div>`;
+                    })
+                    .join('') || (order.items_summary || '<span style="color:var(--accent-warning);">No items recorded</span>');
 
                 const paymentBadgeBg = order.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-warning)';
 

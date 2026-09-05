@@ -160,7 +160,7 @@ exports.mpesaCallback = async (req, res) => {
                     `${displayMessage} — Awaiting receipt in callback; complete manually if needed.`
                 );
                 await db.execute(
-                    'UPDATE payments SET amount = COALESCE(?, amount), phone_number = COALESCE(?, phone_number), mpesa_result_message = ?, ' +
+                    'UPDATE payments SET shift_id = COALESCE(shift_id, (SELECT shift_id FROM orders WHERE id = order_id)), amount = COALESCE(?, amount), phone_number = COALESCE(?, phone_number), mpesa_result_message = ?, ' +
                         'customer_name = COALESCE(NULLIF(?, ""), customer_name) WHERE mpesa_checkout_id = ?',
                     [amountDecimal, phonePaid || null, pendingMsg, payerName || null, checkoutID]
                 );
@@ -185,7 +185,7 @@ exports.mpesaCallback = async (req, res) => {
                 await conn.beginTransaction();
 
                 await conn.execute(
-                    'UPDATE payments SET transaction_id = ?, amount = COALESCE(?, amount), phone_number = COALESCE(?, phone_number), ' +
+                    'UPDATE payments SET shift_id = COALESCE(shift_id, (SELECT shift_id FROM orders WHERE id = order_id)), transaction_id = ?, amount = COALESCE(?, amount), phone_number = COALESCE(?, phone_number), ' +
                         "status = 'confirmed', confirmed_at = CURRENT_TIMESTAMP, mpesa_result_message = ?, " +
                         'customer_name = COALESCE(NULLIF(?, ""), customer_name) WHERE mpesa_checkout_id = ?',
                     [mpesaReceipt, amountDecimal, phonePaid || null, displayMessage, payerName || null, checkoutID]
