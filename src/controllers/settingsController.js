@@ -64,6 +64,42 @@ exports.saveReceiptSettings = async (req, res) => {
     }
 };
 
+// ── Order Discount Settings ─────────────────────────────────────────────────
+exports.getDiscountSettings = async (req, res) => {
+    try {
+        const [rows] = await db.execute('SELECT * FROM discount_settings WHERE id = 1');
+        if (rows.length === 0) {
+            return res.json({ success: true, data: { enabled: true, max_percentage: 100 } });
+        }
+        res.json({ success: true, data: { ...rows[0], enabled: !!rows[0].enabled } });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.saveDiscountSettings = async (req, res) => {
+    const { enabled, max_percentage } = req.body;
+    const maxPct = Number(max_percentage);
+    if (!Number.isFinite(maxPct) || maxPct <= 0 || maxPct > 100) {
+        return res.status(400).json({ success: false, message: 'Maximum discount percentage must be between 0 and 100' });
+    }
+    try {
+        await db.execute(`
+            INSERT INTO discount_settings (id, enabled, max_percentage)
+            VALUES (1, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                enabled = VALUES(enabled),
+                max_percentage = VALUES(max_percentage)
+        `, [enabled ? 1 : 0, maxPct]);
+
+        res.json({ success: true, message: 'Discount settings saved successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
 exports.openCashDrawer = async (req, res) => {
     try {
         const [rows] = await db.execute('SELECT printer_ip, printer_port FROM receipt_settings WHERE id = 1');

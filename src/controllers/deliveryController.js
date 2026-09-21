@@ -1,4 +1,6 @@
 const db = require('../config/db');
+const { REPEAT_CUSTOMER_SQL } = require('./orderController');
+const { computeAutoDiscount } = require('../utils/discountRules');
 
 // Initialize database table if not exists
 (async () => {
@@ -87,10 +89,54 @@ exports.handleWebhookOrder = async (req, res) => {
             return res.status(200).json({ success: true, message: 'Duplicate order ignored' });
         }
 
+        // Try to resolve each incoming item to an inventory item (by name) so item-specific discount
+        // rules can match webhook orders too; falls back to id:null (whole-order rules still apply).
+        const itemNames = [...new Set(items.map((i) => String(i.name).trim().toLowerCase()))];
+        const [inventoryMatches] = itemNames.length > 0
+            ? await connection.query('SELECT id, name FROM inventory WHERE LOWER(TRIM(name)) IN (?)', [itemNames])
+            : [[]];
+        const inventoryIdByName = new Map(inventoryMatches.map((row) => [row.name.trim().toLowerCase(), row.id]));
+        const resolvedItems = items.map((item) => ({
+            id: inventoryIdByName.get(String(item.name).trim().toLowerCase()) || null,
+            quantity: Number(item.quantity),
+            price: Number(item.price)
+        }));
+
+        // Automatically apply a matching platform-wide / food-specific / time-of-day / day-of-week
+        // discount rule (configured on the Discounts page), same logic as manually-entered orders.
+        let autoDiscount = null;
+        let finalTotalAmount = totalAmount;
+        const [discountSettingsRows] = await connection.execute('SELECT * FROM discount_settings WHERE id = 1');
+        const discountSettings = discountSettingsRows[0] || { enabled: 1, max_percentage: 100 };
+        if (discountSettings.enabled) {
+            autoDiscount = await computeAutoDiscount(connection, {
+                platform,
+                orderTotal: totalAmount,
+                orderItems: resolvedItems,
+                maxPercentage: Number(discountSettings.max_percentage) || 100
+            });
+            if (autoDiscount) {
+                finalTotalAmount = Math.round((totalAmount - autoDiscount.discountAmount) * 100) / 100;
+                if (finalTotalAmount <= 0) autoDiscount = null;
+            }
+        }
+        if (!autoDiscount) finalTotalAmount = totalAmount;
+
         // Save order
         const [orderResult] = await connection.execute(
-            'INSERT INTO orders (platform, platform_order_id, total_amount, status, customer_name) VALUES (?, ?, ?, ?, ?)',
-            [platform, order_id, totalAmount, status, customer_name || 'Delivery Customer']
+            `INSERT INTO orders (platform, platform_order_id, total_amount, status, customer_name,
+                original_total_amount, discount_type, discount_value, discount_amount, discount_reason, discount_source, discount_rule_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                platform, order_id, finalTotalAmount, status, customer_name || 'Delivery Customer',
+                autoDiscount ? totalAmount : null,
+                autoDiscount ? autoDiscount.discountType : 'none',
+                autoDiscount ? autoDiscount.discountValue : 0,
+                autoDiscount ? autoDiscount.discountAmount : 0,
+                autoDiscount ? `Auto: ${autoDiscount.ruleName}` : null,
+                autoDiscount ? 'auto' : null,
+                autoDiscount ? autoDiscount.ruleId : null
+            ]
         );
         const internalOrderId = orderResult.insertId;
 
@@ -102,7 +148,8 @@ exports.handleWebhookOrder = async (req, res) => {
             );
         }
 
-        // Save fees if provided, otherwise fetch platform settings and calculate
+        // Save fees if provided, otherwise fetch platform settings and calculate (on the final,
+        // post-discount total, since that's what the platform will actually settle)
         if (fees && fees.length > 0) {
             for (const fee of fees) {
                 await connection.execute(
@@ -118,12 +165,23 @@ exports.handleWebhookOrder = async (req, res) => {
             );
             const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
             if (commissionPct > 0) {
-                const feeAmount = totalAmount * (commissionPct / 100);
+                const feeAmount = finalTotalAmount * (commissionPct / 100);
                 await connection.execute(
                     'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
                     [internalOrderId, commissionPct, feeAmount]
                 );
             }
+        }
+
+        if (autoDiscount) {
+            await connection.execute(
+                'INSERT INTO audit_logs (user_id, action, details) VALUES (?, ?, ?)',
+                [
+                    null,
+                    'Auto-applied discount rule',
+                    `Order #${internalOrderId} (${platform}, webhook): rule "${autoDiscount.ruleName}" applied ${autoDiscount.discountType} discount of ${autoDiscount.discountValue}${autoDiscount.discountType === 'percentage' ? '%' : ''} = KES ${autoDiscount.discountAmount}. New total: KES ${finalTotalAmount}.`
+                ]
+            );
         }
 
         await connection.commit();
@@ -360,7 +418,8 @@ exports.getDeliveryOrders = async (req, res) => {
             (SELECT MAX(p.confirmed_at) FROM payments p WHERE p.order_id = o.id AND p.status = 'confirmed') AS paid_at,
             (SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', COALESCE(oi.item_name, i.name, 'Food')) SEPARATOR ', ')
              FROM order_items oi LEFT JOIN inventory i ON i.id = oi.item_id
-             WHERE oi.order_id = o.id) AS delivered_food
+             WHERE oi.order_id = o.id) AS delivered_food,
+            ${REPEAT_CUSTOMER_SQL}
             FROM orders o LEFT JOIN users u ON o.cashier_id = u.id
             WHERE o.platform IS NOT NULL AND (o.scheduled_for IS NULL OR o.scheduled_released = 1)`;
         const params = [];

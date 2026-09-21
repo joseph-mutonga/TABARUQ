@@ -25,6 +25,7 @@ app.use('/api/workers', require('./routes/workers'));
 app.use('/api/shifts', require('./routes/shifts'));
 app.use('/api/c2b', require('./routes/c2b'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/discount-rules', require('./routes/discountRules'));
 
 app.use(express.static(path.join(__dirname, '../public')));
 

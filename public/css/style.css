@@ -1516,6 +1516,18 @@ main.container .form-control[style*="color:#fff"] {
     color: #526371 !important;
 }
 
+/* Plain icon-only close ("x") buttons on any modal use a transparent background,
+   so on the light card surface they must use a dark colour to stay visible -
+   the generic modal-button rule below would otherwise force them white-on-white. */
+[id$="Modal"] > div:not(.premium-modal) button[style*="background:transparent"],
+[id$="Modal"] > div:not(.premium-modal) button[style*="background: transparent"] {
+    color: #526371 !important;
+}
+[id$="Modal"] > div:not(.premium-modal) button[style*="background:transparent"]:hover,
+[id$="Modal"] > div:not(.premium-modal) button[style*="background: transparent"]:hover {
+    color: #273746 !important;
+}
+
 /* High-contrast dialog surfaces across admin and cashier pages. */
 [id$="Modal"] > div:not(.premium-modal),
 .modal-content {

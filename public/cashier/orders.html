@@ -596,6 +596,22 @@
                 const tillNum = order.mpesa_till || '174379';
                 const footerMsg = order.footer_message || 'Thank you for dining with us!';
 
+                const hasDiscount = Number(order.discount_amount) > 0;
+                const subtotal = order.original_total_amount != null 
+                    ? Number(order.original_total_amount) 
+                    : ((order.items && order.items.length) 
+                        ? order.items.reduce((s, it) => s + (Number(it.subtotal) || (Number(it.price) * Number(it.quantity))), 0) 
+                        : (Number(order.total_amount) + (hasDiscount ? Number(order.discount_amount) : 0)));
+
+                let discountLabel = 'Discount';
+                if (order.discount_type === 'percentage' && Number(order.discount_value) > 0) {
+                    discountLabel = `Discount (${Number(order.discount_value)}%)`;
+                } else if (order.discount_source === 'auto' && order.discount_reason) {
+                    discountLabel = `Discount (${order.discount_reason.replace(/^Auto:\s*/, '')})`;
+                } else if (order.discount_reason) {
+                    discountLabel = `Discount (${order.discount_reason})`;
+                }
+
                 printWindow.document.write(`
                     <html>
                     <head>
@@ -627,10 +643,19 @@
                                 ${itemsHtml}
                             </tbody>
                         </table>
+                        ${hasDiscount ? `
+                        <div style="border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; font-size: 13px;">
+                            <div class="meta-item"><span>Subtotal:</span> <span>${formatCurrency(subtotal)}</span></div>
+                            <div class="meta-item" style="font-weight: bold;"><span>${discountLabel}:</span> <span>-${formatCurrency(order.discount_amount)}</span></div>
+                        </div>
+                        ` : ''}
                         <div class="total">Total Amount: ${formatCurrency(order.total_amount)}</div>
+                        ${(order.payment_method) ? `
+                        <div class="meta-item" style="margin-top: 6px; font-size: 12px;"><span>Payment:</span> <strong>${order.payment_method}${order.transaction_id ? ' (' + order.transaction_id + ')' : ''}</strong></div>
+                        ` : ''}
                         <div style="margin-top: 15px; border-top: 1px dashed #000; padding-top: 8px; font-size: 13px;">
                             <div class="meta-item"><span>M-Pesa Paybill:</span> <strong>${paybillNum}</strong></div>
-                            <div class="meta-item"><span>M-Pesa Till:</span> <strong>${tillNum}</strong></div>
+                            <div class="meta-item"><span>Account Number:</span> <strong>${tillNum}</strong></div>
                         </div>
                         <div class="footer">
                             <p style="margin: 5px 0;">${footerMsg}</p>

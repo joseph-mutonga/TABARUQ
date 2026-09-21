@@ -13,6 +13,10 @@ router.get('/deduction-rules', verifyToken, settingsController.getDeductionRules
 router.post('/deduction-rules', verifyToken, isAdmin, settingsController.saveDeductionRule);
 router.delete('/deduction-rules/:id', verifyToken, isAdmin, settingsController.deleteDeductionRule);
 
+// ── Order Discount Settings ───────────────────────────────────────────────────
+router.get('/discounts', verifyToken, settingsController.getDiscountSettings);           // Allow cashiers to check if enabled
+router.post('/discounts', verifyToken, isAdmin, settingsController.saveDiscountSettings); // Only admin can save
+
 // ── Combo / Bundle Recipes ────────────────────────────────────────────────────
 router.get('/recipes', verifyToken, settingsController.getRecipes);
 router.post('/recipes', verifyToken, isAdmin, settingsController.saveRecipe);

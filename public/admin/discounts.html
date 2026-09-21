@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discounts | TABARUQ Foods</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="../css/style.css?v=5">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* The shared stylesheet inverts the native time-picker glyph to white for the old dark
+           theme; on this page's white inputs that makes it invisible, so restore its natural
+           (dark) colour and make it a bit larger/clearer. */
+        #rStartTime::-webkit-calendar-picker-indicator,
+        #rEndTime::-webkit-calendar-picker-indicator {
+            filter: none;
+            opacity: 0.75;
+            cursor: pointer;
+            padding: 3px;
+        }
+        #rStartTime::-webkit-calendar-picker-indicator:hover,
+        #rEndTime::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>TABARUQ</h2>
+            <ul class="nav-links">
+                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food &amp; Drinks POS</a></li>
+                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
+                <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers &amp; Payroll</a></li>
+                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+                <li><a href="stocks.html"><i class="fas fa-warehouse"></i> Stocks</a></li>
+                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
+                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+                <li><a href="discounts.html" class="active"><i class="fas fa-percent"></i> Discounts</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
+                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="container">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <div>
+                    <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Discounts</h1>
+                    <p class="card-small" style="color: rgba(255,255,255,0.85); font-weight: 500;">Give one-off discounts to individual delivery / online platform orders, and set up automatic rules that apply platform-wide.</p>
+                </div>
+            </header>
+
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- AUTOMATIC DISCOUNT RULES (platform-wide / food-specific /    -->
+            <!-- time-of-day / day-of-week — applies automatically, not per   -->
+            <!-- individual transaction)                                     -->
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <div class="glass-card" style="margin-top:0;" id="discountRulesCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <h3 style="color:#ffffff; font-weight:800; margin:0;"><i class="fas fa-magic"></i> Automatic Discount Rules</h3>
+                        <p class="card-small" style="color:var(--text-gray); margin-top:0.3rem; max-width:680px;">
+                            Set discounts that apply automatically to online platform orders &mdash; for the whole platform, a specific food item, a specific time of day, and/or specific days of the week. These affect every matching order automatically; they are not applied per transaction.
+                            If more than one rule matches an order, only the single best (highest-value) discount is applied.
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" id="addRuleBtn" style="white-space:nowrap;"><i class="fas fa-plus"></i> Add Discount Rule</button>
+                </div>
+
+                <div class="table-container" style="margin-top:1rem;">
+                    <table id="rulesTableDisc">
+                        <thead>
+                            <tr>
+                                <th>Rule</th>
+                                <th>Platform</th>
+                                <th>Food Item</th>
+                                <th>Discount</th>
+                                <th>Days</th>
+                                <th>Time Window</th>
+                                <th>Status</th>
+                                <th style="text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rulesTableDiscBody">
+                            <tr><td colspan="8" style="text-align:center; color:var(--text-gray); padding:2rem;">Loading&hellip;</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ORDER DISCOUNTS (safety controls)                            -->
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <div class="glass-card" style="margin-top:2rem;" id="discountSettingsCard">
+                <h3 style="color: #ffffff; font-weight: 800;"><i class="fas fa-shield-alt"></i> Order Discount Controls</h3>
+                <p class="card-small" style="color:var(--text-gray); margin-bottom:1.5rem;">
+                    Enable or disable discounts (both manual and automatic-rule) on delivery / online platform orders, and cap the maximum percentage allowed.
+                </p>
+                <form id="discountSettingsForm" style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; align-items:flex-end;">
+                    <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:0.75rem;">
+                        <label style="color: var(--text-gray); font-size: 0.9rem; font-weight: 500; margin:0;">
+                            <input type="checkbox" id="discountEnabled" style="width:auto; margin-right:0.5rem; vertical-align:middle;">
+                            Enable order discounts
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label style="color: var(--text-gray); font-size: 0.9rem; font-weight: 500;">Maximum Discount Allowed (%)</label>
+                        <input type="number" id="discountMaxPercentage" class="form-control" min="1" max="100" step="0.1" required style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;">
+                    </div>
+                    <div style="grid-column: span 2; display: flex; justify-content: flex-end; margin-top: 1rem;">
+                        <button type="submit" class="btn btn-primary" style="padding:0.6rem 1.5rem;"><i class="fas fa-save"></i> Save Settings</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- APPLY DISCOUNT TO ONLINE PLATFORM ORDERS (manual, one-off)   -->
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <div class="glass-card" style="margin-top:2rem;" id="applyDiscountCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <h3 style="color:#ffffff; font-weight:800; margin:0;"><i class="fas fa-hand-holding-usd"></i> Apply Discount to a Specific Order</h3>
+                        <p class="card-small" style="color:var(--text-gray); margin-top:0.3rem; max-width:640px;">
+                            When you give a customer a one-off discount directly on Uber Eats, Glovo, Bolt Food or Tabaruq Delivery (e.g. for a repeat customer), record it here so the order's expected payment amount matches exactly what will actually be collected/settled from the platform.
+                        </p>
+                    </div>
+                    <div style="display:flex; gap:0.75rem; align-items:center;">
+                        <select id="discOrdersPlatformFilter" class="form-control" style="width:auto; min-width:150px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                            <option value="all">All Platforms</option>
+                            <option value="Uber Eats">Uber Eats</option>
+                            <option value="Glovo">Glovo</option>
+                            <option value="Bolt Food">Bolt Food</option>
+                            <option value="Tabaruq Delivery">Tabaruq Delivery</option>
+                        </select>
+                        <label style="color:var(--text-gray); font-size:0.85rem; font-weight:500; display:flex; align-items:center; gap:0.4rem; white-space:nowrap;">
+                            <input type="checkbox" id="discOrdersShowPaid" style="width:auto;"> Show paid orders
+                        </label>
+                        <button class="btn" id="refreshDiscOrdersBtn" style="background:rgba(255,255,255,0.07); color:#fff; white-space:nowrap;"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                </div>
+
+                <div class="table-container" style="margin-top:1rem;">
+                    <table id="discOrdersTable">
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Platform</th>
+                                <th>Customer</th>
+                                <th>Order Amount</th>
+                                <th>Discount Applied</th>
+                                <th>Payment</th>
+                                <th style="text-align:center;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="discOrdersTableBody">
+                            <tr><td colspan="7" style="text-align:center; color:var(--text-gray); padding:2rem;">Loading&hellip;</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ════ DISCOUNT RULE MODAL ═══════════════════════════════════════════ -->
+    <div id="ruleModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.82); z-index:2000; justify-content:center; align-items:center;">
+        <div style="background:var(--card-bg,#1e1e2e); border-radius:1rem; padding:2rem; width:520px; max-height:85vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+                <h3 style="color:#fff; font-weight:800; margin:0;" id="ruleModalTitle"><i class="fas fa-magic"></i> Discount Rule</h3>
+                <button onclick="closeRuleModal()" style="background:transparent; border:none; color:rgba(255,255,255,0.6); font-size:1.3rem; cursor:pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="ruleForm">
+                <input type="hidden" id="rId">
+                <div class="form-group">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Rule Name</label>
+                    <input type="text" id="rName" class="form-control" required placeholder="e.g. Weekend Uber Eats 10% off" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Platform</label>
+                        <select id="rPlatform" class="form-control" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                            <option value="">All Platforms</option>
+                            <option value="Uber Eats">Uber Eats</option>
+                            <option value="Glovo">Glovo</option>
+                            <option value="Bolt Food">Bolt Food</option>
+                            <option value="Tabaruq Delivery">Tabaruq Delivery</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Food Item</label>
+                        <select id="rItemId" class="form-control" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                            <option value="">All Items (whole order)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Discount Type</label>
+                        <select id="rType" class="form-control" required style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                            <option value="percentage">Percentage (%)</option>
+                            <option value="fixed">Fixed Amount (KES)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;" id="rValueLabel">Discount Value (%)</label>
+                        <input type="number" id="rValue" class="form-control" min="0.01" step="0.01" required style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;" oninput="updateRuleValueLabel()">
+                    </div>
+                </div>
+                <p id="rValueCapHint" class="card-small" style="color:#f5b942; margin-top:-0.75rem; margin-bottom:1rem; display:none;">
+                    <i class="fas fa-exclamation-triangle"></i> <span id="rValueCapHintText"></span>
+                </p>
+
+                <div class="form-group">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Days of Week <span style="color:rgba(255,255,255,0.45); font-weight:400;">(leave all unchecked for every day)</span></label>
+                    <div id="rDaysContainer" style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-top:0.4rem;"></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Start Time <span style="color:rgba(255,255,255,0.45); font-weight:400;">(optional)</span></label>
+                        <input type="time" id="rStartTime" class="form-control" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                    </div>
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">End Time <span style="color:rgba(255,255,255,0.45); font-weight:400;">(optional)</span></label>
+                        <input type="time" id="rEndTime" class="form-control" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                    </div>
+                </div>
+                <p class="card-small" style="color:rgba(255,255,255,0.45); margin-top:-0.75rem; margin-bottom:1rem;">
+                    Tip: a start time later than the end time means the window spans midnight (e.g. 22:00 &rarr; 02:00).
+                </p>
+
+                <div style="display:flex; gap:0.75rem; margin-top:0.5rem;">
+                    <button type="button" class="btn" style="flex:1; background:rgba(255,255,255,0.07); color:#fff;" onclick="closeRuleModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="flex:1;"><i class="fas fa-save"></i> Save Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ════ APPLY DISCOUNT MODAL ═══════════════════════════════════════════ -->
+    <div id="discountModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.82); z-index:2000; justify-content:center; align-items:center;">
+        <div style="background:var(--card-bg,#1e1e2e); border-radius:1rem; padding:2rem; width:460px; max-height:85vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <h3 style="color:#fff; font-weight:800; margin:0;"><i class="fas fa-percent"></i> Give / Update Discount</h3>
+                <button onclick="closeDiscountModal()" style="background:transparent; border:none; color:rgba(255,255,255,0.6); font-size:1.3rem; cursor:pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="card-small" style="color:var(--text-gray); margin-bottom:1.25rem;" id="discountModalOrderInfo"></p>
+            <form id="discountForm">
+                <input type="hidden" id="dOrderId">
+                <div class="form-group">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Discount Type</label>
+                    <select id="dType" class="form-control" required style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                        <option value="percentage">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount (KES)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;" id="dValueLabel">Discount Value (%)</label>
+                    <input type="number" id="dValue" class="form-control" min="0.01" step="0.01" required style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                </div>
+                <div class="form-group">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Reason (optional)</label>
+                    <input type="text" id="dReason" class="form-control" placeholder="e.g. Loyal repeat customer" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                </div>
+                <div style="display:flex; gap:0.75rem; margin-top:1.5rem;">
+                    <button type="button" class="btn" style="flex:1; background:rgba(255,255,255,0.07); color:#fff;" onclick="closeDiscountModal()">Cancel</button>
+                    <button type="button" class="btn" id="dRemoveBtn" style="flex:1; background:var(--accent-danger,#ef4444); color:#fff; display:none;" onclick="removeDiscountFromOrder()"><i class="fas fa-times"></i> Remove</button>
+                    <button type="submit" class="btn btn-primary" style="flex:1;"><i class="fas fa-save"></i> Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const normalizedRole = String(user?.role || '').toLowerCase();
+        if (!user || normalizedRole !== 'admin') window.location.href = '../index.html';
+
+        document.getElementById('logoutBtn').onclick = () => {
+            localStorage.clear();
+            window.location.href = '../index.html';
+        };
+
+        function showToast(msg, type = 'success') {
+            const toast = document.createElement('div');
+            toast.style.cssText = `position:fixed; bottom:2rem; right:2rem; background:${type === 'success' ? 'var(--accent-success,#22c55e)' : 'var(--accent-danger,#ef4444)'}; color:#fff; padding:1rem 1.5rem; border-radius:0.6rem; box-shadow:0 10px 30px rgba(0,0,0,0.3); z-index:5000; font-weight:600; display:flex; align-items:center; gap:0.6rem;`;
+            toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        // ─── Inventory items cache (for the item-specific rule / order info) ──
+        let allItems = [];
+        async function loadAllItems() {
+            try {
+                const res = await apiFetch('/inventory');
+                allItems = res.data || [];
+                const select = document.getElementById('rItemId');
+                allItems.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item.id;
+                    opt.textContent = item.name;
+                    select.appendChild(opt);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // AUTOMATIC DISCOUNT RULES
+        // ═══════════════════════════════════════════════════════════════════
+        const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        let discountRules = [];
+        // The "Order Discount Controls" max % (below) is a global safety ceiling applied to every
+        // percentage-type discount (automatic rules AND one-off order discounts). Rules created here
+        // are capped to it when applied, so we surface it live in this form and offer to raise it
+        // instead of silently letting a rule under-deliver what the admin configured.
+        let currentMaxPercentage = 100;
+        let currentDiscountsEnabled = true;
+
+        // Build the day-of-week checkboxes once
+        (function buildDaysCheckboxes() {
+            const container = document.getElementById('rDaysContainer');
+            DAY_NAMES.forEach((label, idx) => {
+                const wrap = document.createElement('label');
+                wrap.style.cssText = 'display:flex; align-items:center; gap:0.35rem; color:var(--text-gray); font-size:0.85rem; font-weight:500; background:rgba(255,255,255,0.05); padding:0.4rem 0.7rem; border-radius:0.5rem; cursor:pointer;';
+                wrap.innerHTML = `<input type="checkbox" class="rDayCheckbox" value="${idx}" style="width:auto;"> ${label}`;
+                container.appendChild(wrap);
+            });
+        })();
+
+        function formatTime12(t) {
+            if (!t) return '';
+            const [h, m] = t.split(':').map(Number);
+            const period = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+        }
+
+        async function loadDiscountRules() {
+            const tbody = document.getElementById('rulesTableDiscBody');
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-gray); padding:2rem;">Loading&hellip;</td></tr>`;
+            try {
+                const res = await apiFetch('/discount-rules');
+                discountRules = res.data || [];
+                renderDiscountRulesTable();
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-gray); padding:2rem;">Failed to load discount rules.</td></tr>`;
+            }
+        }
+
+        function renderDiscountRulesTable() {
+            const tbody = document.getElementById('rulesTableDiscBody');
+            if (discountRules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-gray); padding:2rem;">
+                    <i class="fas fa-info-circle" style="margin-right:0.5rem; opacity:0.5;"></i>No discount rules yet. Click "Add Discount Rule" to create one.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = discountRules.map(r => {
+                const discountLabel = r.discount_type === 'percentage' ? `${Number(r.discount_value)}%` : formatCurrency(r.discount_value);
+                const daysLabel = r.days_of_week
+                    ? r.days_of_week.split(',').map(d => DAY_NAMES[Number(d)]).join(', ')
+                    : 'Every day';
+                const timeLabel = (r.start_time && r.end_time)
+                    ? `${formatTime12(r.start_time.substring(0, 5))} &ndash; ${formatTime12(r.end_time.substring(0, 5))}`
+                    : 'All day';
+                const statusBadge = r.is_active
+                    ? `<span class="badge" style="background:var(--accent-success);">Active</span>`
+                    : `<span class="badge" style="background:#71808d;">Disabled</span>`;
+
+                return `<tr>
+                    <td style="color:#fff; font-weight:600;">${r.name}</td>
+                    <td><span class="badge" style="background:var(--accent-magenta,#a5b4fc);">${r.platform || 'All Platforms'}</span></td>
+                    <td style="color:#fff;">${r.item_name || 'All Items'}</td>
+                    <td style="color:#fff; font-weight:700;">-${discountLabel}</td>
+                    <td style="color:var(--text-gray); font-size:0.85rem;">${daysLabel}</td>
+                    <td style="color:var(--text-gray); font-size:0.85rem;">${timeLabel}</td>
+                    <td>${statusBadge}</td>
+                    <td style="text-align:center; white-space:nowrap;">
+                        <button type="button" onclick="editDiscountRule(${r.id})" class="btn" style="background:#2563eb; padding:0.4rem 0.75rem; font-size:0.85rem; margin-right:0.35rem;" title="Edit rule"><i class="fas fa-edit"></i></button>
+                        <button type="button" onclick="toggleDiscountRule(${r.id}, ${r.is_active ? 0 : 1})" class="btn" style="background:#d97706; padding:0.4rem 0.75rem; font-size:0.85rem; margin-right:0.35rem;" title="${r.is_active ? 'Disable' : 'Enable'}"><i class="fas fa-power-off"></i></button>
+                        <button type="button" onclick="deleteDiscountRule(${r.id})" class="btn" style="background:#dc2626; padding:0.4rem 0.75rem; font-size:0.85rem;" title="Delete rule"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function updateRuleValueLabel() {
+            const type = document.getElementById('rType').value;
+            document.getElementById('rValueLabel').textContent = type === 'percentage' ? 'Discount Value (%)' : 'Discount Value (KES)';
+            const hint = document.getElementById('rValueCapHint');
+            const value = Number(document.getElementById('rValue').value);
+            if (type === 'percentage' && value > 0 && value > currentMaxPercentage) {
+                document.getElementById('rValueCapHintText').textContent =
+                    `This will be capped to ${currentMaxPercentage}% (the current "Order Discount Controls" max below) until you raise that cap.`;
+                hint.style.display = 'block';
+            } else {
+                hint.style.display = 'none';
+            }
+        }
+        document.getElementById('rType').onchange = updateRuleValueLabel;
+
+        document.getElementById('addRuleBtn').onclick = () => openRuleModal();
+
+        function openRuleModal(rule = null) {
+            document.getElementById('ruleForm').reset();
+            document.querySelectorAll('.rDayCheckbox').forEach(cb => cb.checked = false);
+            document.getElementById('rId').value = rule ? rule.id : '';
+            document.getElementById('ruleModalTitle').innerHTML = rule
+                ? '<i class="fas fa-magic"></i> Edit Discount Rule'
+                : '<i class="fas fa-magic"></i> Add Discount Rule';
+
+            if (rule) {
+                document.getElementById('rName').value = rule.name;
+                document.getElementById('rPlatform').value = rule.platform || '';
+                document.getElementById('rItemId').value = rule.item_id || '';
+                document.getElementById('rType').value = rule.discount_type;
+                document.getElementById('rValue').value = Number(rule.discount_value);
+                if (rule.days_of_week) {
+                    rule.days_of_week.split(',').forEach(d => {
+                        const cb = document.querySelector(`.rDayCheckbox[value="${d}"]`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+                document.getElementById('rStartTime').value = rule.start_time ? rule.start_time.substring(0, 5) : '';
+                document.getElementById('rEndTime').value = rule.end_time ? rule.end_time.substring(0, 5) : '';
+            }
+            updateRuleValueLabel();
+            document.getElementById('ruleModal').style.display = 'flex';
+        }
+
+        function closeRuleModal() {
+            document.getElementById('ruleModal').style.display = 'none';
+        }
+
+        function editDiscountRule(id) {
+            const rule = discountRules.find(r => r.id === id);
+            if (rule) openRuleModal(rule);
+        }
+
+        document.getElementById('ruleForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('rId').value;
+            const days_of_week = Array.from(document.querySelectorAll('.rDayCheckbox:checked')).map(cb => Number(cb.value));
+            const payload = {
+                name: document.getElementById('rName').value,
+                platform: document.getElementById('rPlatform').value || null,
+                item_id: document.getElementById('rItemId').value || null,
+                discount_type: document.getElementById('rType').value,
+                discount_value: document.getElementById('rValue').value,
+                days_of_week,
+                start_time: document.getElementById('rStartTime').value || null,
+                end_time: document.getElementById('rEndTime').value || null
+            };
+
+            // Percentage rules are capped by the global "Order Discount Controls" max % whenever
+            // they're actually applied to an order - so a rule set above that cap would silently
+            // under-deliver. Offer to raise the cap now instead of letting that happen quietly.
+            const pctValue = Number(payload.discount_value);
+            if (payload.discount_type === 'percentage' && pctValue > currentMaxPercentage) {
+                const raise = confirm(
+                    `This rule's discount (${pctValue}%) is higher than the current global max discount cap ` +
+                    `(${currentMaxPercentage}%) set in "Order Discount Controls" below.\n\n` +
+                    `Until that cap is raised, this rule will only ever give ${currentMaxPercentage}% off.\n\n` +
+                    `Raise the global cap to ${pctValue}% now so this rule works as configured?`
+                );
+                if (raise) {
+                    try {
+                        await apiFetch('/settings/discounts', {
+                            method: 'POST',
+                            body: JSON.stringify({ enabled: currentDiscountsEnabled, max_percentage: pctValue })
+                        });
+                        currentMaxPercentage = pctValue;
+                        document.getElementById('discountMaxPercentage').value = pctValue;
+                        updateRuleValueLabel();
+                    } catch (err) { showToast(err.message, 'error'); return; }
+                }
+            }
+
+            try {
+                if (id) {
+                    await apiFetch(`/discount-rules/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                    showToast('Discount rule updated', 'success');
+                } else {
+                    await apiFetch('/discount-rules', { method: 'POST', body: JSON.stringify(payload) });
+                    showToast('Discount rule created', 'success');
+                }
+                closeRuleModal();
+                await loadDiscountRules();
+            } catch (err) { showToast(err.message, 'error'); }
+        };
+
+        async function toggleDiscountRule(id, newState) {
+            try {
+                await apiFetch(`/discount-rules/${id}/toggle`, { method: 'PATCH', body: JSON.stringify({ is_active: newState }) });
+                showToast(`Discount rule ${newState ? 'enabled' : 'disabled'}`, 'success');
+                await loadDiscountRules();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        async function deleteDiscountRule(id) {
+            if (!confirm('Delete this discount rule? This cannot be undone.')) return;
+            try {
+                await apiFetch(`/discount-rules/${id}`, { method: 'DELETE' });
+                showToast('Discount rule deleted', 'success');
+                await loadDiscountRules();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ORDER DISCOUNT SETTINGS (enable / max %)
+        // ═══════════════════════════════════════════════════════════════════
+        async function loadDiscountSettings() {
+            try {
+                const res = await apiFetch('/settings/discounts');
+                const data = res.data || {};
+                currentDiscountsEnabled = !!data.enabled;
+                currentMaxPercentage = Number(data.max_percentage ?? 100) || 100;
+                document.getElementById('discountEnabled').checked = currentDiscountsEnabled;
+                document.getElementById('discountMaxPercentage').value = currentMaxPercentage;
+                updateRuleValueLabel();
+            } catch (err) { console.error(err); }
+        }
+
+        document.getElementById('discountSettingsForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const enabled = document.getElementById('discountEnabled').checked;
+            const max_percentage = document.getElementById('discountMaxPercentage').value;
+            try {
+                await apiFetch('/settings/discounts', {
+                    method: 'POST',
+                    body: JSON.stringify({ enabled, max_percentage })
+                });
+                currentDiscountsEnabled = enabled;
+                currentMaxPercentage = Number(max_percentage) || 100;
+                updateRuleValueLabel();
+                showToast('Discount settings saved!', 'success');
+            } catch (err) { showToast(err.message, 'error'); }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // APPLY DISCOUNT TO A SPECIFIC ORDER (manual, one-off)
+        // ═══════════════════════════════════════════════════════════════════
+        let __discOrders = [];
+
+        async function loadDiscountableOrders() {
+            const tbody = document.getElementById('discOrdersTableBody');
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-gray); padding:2rem;">Loading&hellip;</td></tr>`;
+            try {
+                const platform = document.getElementById('discOrdersPlatformFilter').value;
+                const params = new URLSearchParams();
+                if (platform !== 'all') params.append('platform', platform);
+                const res = await apiFetch('/delivery/orders' + (params.toString() ? `?${params}` : ''));
+                __discOrders = res.data || [];
+                renderDiscOrdersTable();
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-gray); padding:2rem;">Failed to load orders.</td></tr>`;
+            }
+        }
+
+        function renderDiscOrdersTable() {
+            const tbody = document.getElementById('discOrdersTableBody');
+            const showPaid = document.getElementById('discOrdersShowPaid').checked;
+            const orders = __discOrders.filter(o => showPaid || o.payment_status !== 'paid');
+
+            if (orders.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-gray); padding:2rem;">
+                    <i class="fas fa-info-circle" style="margin-right:0.5rem; opacity:0.5;"></i>No online platform orders found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = orders.map(o => {
+                const hasDiscount = o.discount_type && o.discount_type !== 'none' && Number(o.discount_amount) > 0;
+                const repeatBadge = o.is_repeat_customer ? `<span class="badge" style="background:#6366f1; margin-left:0.4rem; font-size:0.68rem;" title="This customer has ordered before"><i class="fas fa-redo"></i> Repeat</span>` : '';
+                const amountCell = hasDiscount
+                    ? `<div style="font-weight:700; color:#fff;">${formatCurrency(o.total_amount)}</div><small style="color:var(--text-gray); text-decoration:line-through;">${formatCurrency(o.original_total_amount)}</small>`
+                    : `<span style="font-weight:700; color:#fff;">${formatCurrency(o.total_amount)}</span>`;
+                const canEdit = o.payment_status !== 'paid';
+
+                let discountCell;
+                if (hasDiscount) {
+                    const discountLabel = o.discount_type === 'percentage' ? `${Number(o.discount_value)}%` : formatCurrency(o.discount_value);
+                    const sourceBadge = o.discount_source === 'auto'
+                        ? `<span class="badge" style="background:#6366f1; font-size:0.65rem; margin-left:0.3rem;" title="Applied automatically by a discount rule">AUTO</span>`
+                        : '';
+                    discountCell = `<span class="badge" style="background:var(--accent-success);" title="${(o.discount_reason || 'No reason given').replace(/"/g, '&quot;')}">-${discountLabel}</span>${sourceBadge}
+                        <div style="font-size:0.75rem; color:var(--text-gray); margin-top:0.2rem;">${formatCurrency(o.discount_amount)} off</div>`;
+                } else {
+                    discountCell = '<span style="color:var(--text-gray);">&mdash;</span>';
+                }
+
+                let actionCell;
+                if (!canEdit) {
+                    actionCell = '<span style="color:var(--text-gray); font-size:0.8rem;">Paid</span>';
+                } else if (hasDiscount) {
+                    actionCell = `<button type="button" onclick="openDiscountModal(${o.id})" class="btn" style="background:#2563eb; padding:0.4rem 0.85rem; font-size:0.82rem;"><i class="fas fa-edit"></i> Edit</button>`;
+                } else {
+                    actionCell = `<button type="button" onclick="openDiscountModal(${o.id})" class="btn btn-success" style="padding:0.35rem 0.8rem; font-size:0.82rem;"><i class="fas fa-percent"></i> Give Discount</button>`;
+                }
+
+                return `<tr>
+                    <td><strong style="color:#fff;">#${o.id}</strong>${o.platform_order_id ? `<br><small style="color:var(--text-gray);">${o.platform_order_id}</small>` : ''}</td>
+                    <td><span class="badge" style="background:var(--accent-magenta,#a5b4fc);">${o.platform}</span></td>
+                    <td style="color:#fff;">${o.customer_name || 'Guest'}${repeatBadge}</td>
+                    <td>${amountCell}</td>
+                    <td>${discountCell}</td>
+                    <td><span class="badge" style="background:${o.payment_status === 'paid' ? 'var(--accent-success)' : 'var(--accent-warning)'};">${o.payment_status === 'paid' ? 'PAID' : (o.payment_status || 'UNPAID')}</span></td>
+                    <td style="text-align:center;">${actionCell}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        document.getElementById('discOrdersPlatformFilter').onchange = loadDiscountableOrders;
+        document.getElementById('discOrdersShowPaid').onchange = renderDiscOrdersTable;
+        document.getElementById('refreshDiscOrdersBtn').onclick = loadDiscountableOrders;
+
+        function openDiscountModal(orderId) {
+            const order = __discOrders.find(o => o.id === orderId);
+            if (!order) return;
+            document.getElementById('dOrderId').value = orderId;
+            const baseAmount = order.original_total_amount != null ? Number(order.original_total_amount) : Number(order.total_amount);
+            document.getElementById('discountModalOrderInfo').textContent =
+                `Order #${orderId} · ${order.platform} · ${order.customer_name || 'Guest'}${order.is_repeat_customer ? ' (Repeat Customer)' : ''} · Current total: ${formatCurrency(baseAmount)}`;
+            document.getElementById('dType').value = order.discount_type && order.discount_type !== 'none' ? order.discount_type : 'percentage';
+            document.getElementById('dValue').value = order.discount_type && order.discount_type !== 'none' ? Number(order.discount_value) : '';
+            document.getElementById('dReason').value = order.discount_reason || '';
+            document.getElementById('dRemoveBtn').style.display = (order.discount_type && order.discount_type !== 'none') ? 'block' : 'none';
+            updateDiscountValueLabel();
+            document.getElementById('discountModal').style.display = 'flex';
+        }
+
+        function closeDiscountModal() {
+            document.getElementById('discountModal').style.display = 'none';
+            document.getElementById('discountForm').reset();
+        }
+
+        function updateDiscountValueLabel() {
+            const type = document.getElementById('dType').value;
+            document.getElementById('dValueLabel').textContent = type === 'percentage' ? 'Discount Value (%)' : 'Discount Value (KES)';
+        }
+        document.getElementById('dType').onchange = updateDiscountValueLabel;
+
+        document.getElementById('discountForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const orderId = document.getElementById('dOrderId').value;
+            const discount_type = document.getElementById('dType').value;
+            const discount_value = document.getElementById('dValue').value;
+            const reason = document.getElementById('dReason').value;
+            try {
+                await apiFetch(`/orders/${orderId}/discount`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ discount_type, discount_value, reason })
+                });
+                showToast('Discount applied — the expected payment amount is now synced with the platform.', 'success');
+                closeDiscountModal();
+                await loadDiscountableOrders();
+            } catch (err) { showToast(err.message, 'error'); }
+        };
+
+        async function removeDiscountFromOrder() {
+            const orderId = document.getElementById('dOrderId').value;
+            if (!confirm('Remove this discount and restore the original order total?')) return;
+            try {
+                await apiFetch(`/orders/${orderId}/discount`, { method: 'DELETE' });
+                showToast('Discount removed', 'success');
+                closeDiscountModal();
+                await loadDiscountableOrders();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // ─── Pending payments badge (shared with other admin pages) ───────────
+        async function checkPendingPayments() {
+            try {
+                const response = await apiFetch('/payments/pending-count');
+                const badge = document.getElementById('pendingBadge');
+                if (badge) {
+                    if (response.count > 0) {
+                        badge.textContent = response.count;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        // ─── Init ─────────────────────────────────────────────────────────────
+        async function init() {
+            await loadAllItems();
+            await Promise.all([
+                loadDiscountRules(),
+                loadDiscountSettings(),
+                loadDiscountableOrders()
+            ]);
+            checkPendingPayments();
+            setInterval(checkPendingPayments, 30000);
+            if (typeof socket !== 'undefined' && socket) {
+                socket.on('payment_update', checkPendingPayments);
+                socket.on('order_update', () => { checkPendingPayments(); loadDiscountableOrders(); });
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -61,9 +61,13 @@
                         <p style="color: #ffffff; text-align: center; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">No items selected</p>
                     </div>
                     <div style="border-top: 1px solid #334155; padding-top: 1rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                        <div id="discountPreview" style="display:none; background:#16a34a; color:white; font-size:0.8rem; font-weight:700; padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.75rem;"></div>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem;">
                             <span style="color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Total</span>
-                            <span id="orderTotal" style="font-size: 1.5rem; font-weight: bold; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">KES 0</span>
+                            <span style="text-align:right;">
+                                <span id="orderTotalOriginal" style="display:none; text-decoration:line-through; color:rgba(255,255,255,0.6); font-size:0.9rem; margin-right:0.5rem;"></span>
+                                <span id="orderTotal" style="font-size: 1.5rem; font-weight: bold; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">KES 0</span>
+                            </span>
                         </div>
                         <button id="checkoutBtn" class="btn btn-primary" style="width: 100%;" disabled>Checkout</button>
                     </div>
@@ -127,6 +131,24 @@
                 <div class="form-group">
                     <label>Bank confirmation code</label>
                     <input type="text" id="bankConfirmationCode" class="form-control" placeholder="Enter bank confirmation code" autocomplete="off">
+                </div>
+            </div>
+            <!-- Order Summary (Auto-applied from Discounts page rules) -->
+            <div id="checkoutSummaryBox" style="margin-bottom: 1.25rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.85rem;">
+                <div style="display: flex; justify-content: space-between; color: rgba(255,255,255,0.7); font-size: 0.9rem; margin-bottom: 0.35rem;">
+                    <span>Order Subtotal:</span>
+                    <span id="checkoutSubtotalDisplay" style="font-weight: 600;">KES 0.00</span>
+                </div>
+                <div id="checkoutDiscountRow" style="display: none; justify-content: space-between; color: #4ade80; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.35rem;">
+                    <span id="checkoutDiscountAmountLabel"><i class="fas fa-tag"></i> Active Discount:</span>
+                    <span id="checkoutDiscountAmountDisplay">-KES 0.00</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: baseline; color: #fff; font-weight: 800; font-size: 1.05rem; border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 0.45rem; margin-top: 0.35rem;">
+                    <span>Amount to Pay:</span>
+                    <span style="text-align: right;">
+                        <span id="checkoutOriginalTotalDisplay" style="display: none; text-decoration: line-through; color: rgba(255,255,255,0.5); font-size: 0.9rem; margin-right: 0.5rem; font-weight: 500;">KES 0.00</span>
+                        <span id="checkoutPayableTotalDisplay" style="color: var(--accent-success); font-size: 1.25rem; font-weight: 800;">KES 0.00</span>
+                    </span>
                 </div>
             </div>
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
@@ -197,12 +219,14 @@
                 </div>
 
                 <div class="total-section-premium">
+                    <div id="postModalDiscount" style="display:none; background:#16a34a; color:white; font-size:0.85rem; font-weight:700; padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.75rem;"></div>
                     <div class="total-label-premium">Grand Total</div>
                     <div id="postModalTotal" class="total-amount-premium">KES 0.00</div>
                 </div>
             </div>
-            <div class="premium-modal-footer">
-                <button type="button" class="btn-close-premium" style="background: #1e293b; box-shadow: 0 15px 35px rgba(30, 41, 59, 0.3);" onclick="closePostCheckoutModal()">Done & New Order</button>
+            <div class="premium-modal-footer" style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+                <button type="button" class="btn-close-premium" style="background: #1e293b; box-shadow: 0 10px 25px rgba(30, 41, 59, 0.3);" onclick="closePostCheckoutModal()">Done & New Order</button>
+                <button type="button" class="btn-close-premium" style="background: var(--primary, #6366f1); box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4); display: inline-flex; align-items: center; gap: 0.5rem;" onclick="printPostCheckoutReceipt()"><i class="fas fa-print"></i> Print Receipt</button>
             </div>
         </div>
     </div>
@@ -274,6 +298,221 @@
         let inventory = [];
         let cart = [];
         let selectedCategory = 'All';
+        let activeDiscountRules = [];
+
+        // ── Discount preview helpers (mirror src/utils/discountRules.js so the POS can show
+        // "this item has a discount right now" without waiting on the server) ────────────────
+        let discountMaxPercentage = 100;
+        async function loadActiveDiscountRules() {
+            try {
+                const resp = await apiFetch('/discount-rules/active');
+                activeDiscountRules = resp.data || [];
+                discountMaxPercentage = Number(resp.maxPercentage) || 100;
+            } catch (err) {
+                activeDiscountRules = []; // fail quiet — discount badges are a nice-to-have, not core POS function
+            }
+        }
+
+        function ruleIsActiveNow(rule) {
+            const now = new Date();
+            if (rule.days_of_week) {
+                const days = String(rule.days_of_week).split(',').map((d) => Number(d.trim()));
+                if (!days.includes(now.getDay())) return false;
+            }
+            if (rule.start_time && rule.end_time) {
+                const pad = (n) => String(n).padStart(2, '0');
+                const currentTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+                const inRange = rule.start_time <= rule.end_time
+                    ? (currentTime >= rule.start_time && currentTime <= rule.end_time)
+                    : (currentTime >= rule.start_time || currentTime <= rule.end_time);
+                if (!inRange) return false;
+            }
+            return true;
+        }
+
+        // Rules that could apply to this specific food item right now (any platform) — used for the menu badge.
+        function getCartItemBasePrice(item, platform = 'none') {
+            let price = Number(item.selling_price);
+            if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
+            if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
+            if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
+            if (platform === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
+            return price;
+        }
+
+        function getItemDiscountInfo(item, platform = 'none') {
+            const base = getCartItemBasePrice(item, platform);
+            if (!(base > 0)) return { hasDiscount: false, basePrice: 0, finalPrice: 0, discountAmount: 0, rule: null };
+
+            const rules = activeDiscountRules.filter((r) => {
+                if (!ruleIsActiveNow(r)) return false;
+                if (r.item_id != null) {
+                    if (Number(r.item_id) !== Number(item.id)) return false;
+                    if (platform && platform !== 'none' && r.platform != null && r.platform !== platform) return false;
+                    return true;
+                }
+                if (platform && platform !== 'none') {
+                    return r.platform == null || r.platform === platform;
+                }
+                return r.platform == null;
+            });
+
+            if (!rules.length) {
+                return { hasDiscount: false, basePrice: base, finalPrice: base, discountAmount: 0, rule: null };
+            }
+
+            let best = null;
+            for (const rule of rules) {
+                const value = Number(rule.discount_value);
+                let amount;
+                if (rule.discount_type === 'percentage') {
+                    const pct = Math.min(value, discountMaxPercentage);
+                    amount = base * (pct / 100);
+                } else {
+                    amount = Math.min(value, base);
+                }
+                amount = Math.round(amount * 100) / 100;
+                if (amount <= 0) continue;
+                if (!best || amount > best.amount) best = { amount, rule };
+            }
+
+            if (!best) {
+                return { hasDiscount: false, basePrice: base, finalPrice: base, discountAmount: 0, rule: null };
+            }
+
+            const finalPrice = Math.max(0, Math.round((base - best.amount) * 100) / 100);
+            return {
+                hasDiscount: true,
+                basePrice: base,
+                finalPrice,
+                discountAmount: best.amount,
+                rule: best.rule
+            };
+        }
+
+        function getCartItemPrice(item, platform) {
+            return getItemDiscountInfo(item, platform).finalPrice;
+        }
+
+        // Rules that could apply to this specific food item right now (any platform) — used for the menu badge.
+        function rulesForItemNow(itemId) {
+            return activeDiscountRules.filter((r) => ruleIsActiveNow(r) && (r.item_id == null || Number(r.item_id) === Number(itemId)));
+        }
+
+        // Best currently-active rule for a single item's own listed price — used to show discounted price on menu tile
+        function bestItemTileDiscount(item) {
+            const info = getItemDiscountInfo(item, 'none');
+            if (info.hasDiscount) {
+                return { amount: info.discountAmount, rule: info.rule, originalPrice: info.basePrice, finalPrice: info.finalPrice };
+            }
+            return null;
+        }
+
+        // Preview of matching rules for the whole order and line items — mirrors
+        // computeAutoDiscount() on the server so the cashier sees what will actually be applied.
+        function previewAutoDiscount(platform) {
+            if (!cart.length) return null;
+            let totalBase = 0;
+            let totalEffective = 0;
+            const appliedRuleNames = [];
+            let primaryRule = null;
+            const itemDiscounts = {};
+
+            for (const item of cart) {
+                const info = getItemDiscountInfo(item, platform);
+                totalBase += info.basePrice * item.quantity;
+                totalEffective += info.finalPrice * item.quantity;
+                if (info.hasDiscount) {
+                    itemDiscounts[item.id] = { amount: info.discountAmount * item.quantity, rule: info.rule };
+                    if (info.rule?.name && !appliedRuleNames.includes(info.rule.name)) {
+                        appliedRuleNames.push(info.rule.name);
+                    }
+                    if (!primaryRule) primaryRule = info.rule;
+                }
+            }
+
+            const totalDiscountAmount = Math.max(0, Math.round((totalBase - totalEffective) * 100) / 100);
+            if (totalDiscountAmount <= 0) return null;
+
+            return {
+                amount: totalDiscountAmount,
+                itemDiscounts,
+                summary: appliedRuleNames.join(', ') || 'Auto-discount',
+                rule: primaryRule || { name: appliedRuleNames.join(', ') || 'Discount' }
+            };
+        }
+
+        function renderDiscountPreview() {
+            const el = document.getElementById('discountPreview');
+            if (!el) return;
+            const platform = (typeof currentMethod !== 'undefined' && currentMethod === 'platform')
+                ? (document.getElementById('orderPlatform')?.value || 'none')
+                : 'none';
+            const best = previewAutoDiscount(platform);
+            if (!best) {
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            el.style.display = 'block';
+            el.innerHTML = `<i class="fas fa-tags"></i> Auto-discount "${best.summary || best.rule.name}" applies: -${formatCurrency(best.amount)}`;
+        }
+
+        function toggleCheckoutDiscount() {
+            const fields = document.getElementById('checkoutDiscountFields');
+            const icon = document.getElementById('checkoutDiscountToggleIcon');
+            if (!fields) return;
+            if (fields.style.display === 'none') {
+                fields.style.display = 'block';
+                if (icon) icon.innerHTML = '<i class="fas fa-chevron-up"></i>';
+                updateCheckoutDiscountCalc();
+            } else {
+                fields.style.display = 'none';
+                if (icon) icon.innerHTML = '<i class="fas fa-chevron-down"></i>';
+            }
+        }
+
+        function updateCheckoutDiscountCalc() {
+            const platformSelection = document.getElementById('orderPlatform')?.value || 'none';
+            const platform = (typeof currentMethod !== 'undefined' && currentMethod === 'platform') ? platformSelection : 'none';
+            
+            let subtotal = 0;
+            let autoDiscountTotal = 0;
+            for (const item of cart) {
+                const info = getItemDiscountInfo(item, platform);
+                subtotal += info.basePrice * item.quantity;
+                if (info.hasDiscount) {
+                    autoDiscountTotal += info.discountAmount * item.quantity;
+                }
+            }
+
+            const autoBest = previewAutoDiscount(platform);
+            const discountAmount = (autoBest && autoBest.amount > 0) ? autoBest.amount : autoDiscountTotal;
+            const payable = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+
+            const subDisplay = document.getElementById('checkoutSubtotalDisplay');
+            const discRow = document.getElementById('checkoutDiscountRow');
+            const discDisplay = document.getElementById('checkoutDiscountAmountDisplay');
+            const discLbl = document.getElementById('checkoutDiscountAmountLabel');
+            const origDisplay = document.getElementById('checkoutOriginalTotalDisplay');
+            const payDisplay = document.getElementById('checkoutPayableTotalDisplay');
+
+            if (subDisplay) subDisplay.textContent = formatCurrency(subtotal);
+            if (payDisplay) payDisplay.textContent = formatCurrency(payable);
+
+            if (discountAmount > 0) {
+                if (discRow) discRow.style.display = 'flex';
+                if (discDisplay) discDisplay.textContent = `-${formatCurrency(discountAmount)}`;
+                if (discLbl) discLbl.innerHTML = `<i class="fas fa-tag"></i> ${autoBest?.summary || 'Active Discount'}:`;
+                if (origDisplay) {
+                    origDisplay.textContent = formatCurrency(subtotal);
+                    origDisplay.style.display = 'inline';
+                }
+            } else {
+                if (discRow) discRow.style.display = 'none';
+                if (origDisplay) origDisplay.style.display = 'none';
+            }
+        }
 
         function toggleScheduledFields() {
             const isChecked = document.getElementById('isScheduledCheckbox').checked;
@@ -381,6 +620,7 @@
                 const response = await apiFetch('/inventory');
                 // Filter out delivery platform-restricted items and raw ingredients for POS cashier
                 inventory = response.data.filter(item => !item.delivery_platform && item.item_type !== 'ingredient');
+                await loadActiveDiscountRules();
                 renderCategoryFilters(inventory);
                 renderMenu(getFilteredItems());
             } catch (err) { alert(err.message); }
@@ -431,9 +671,28 @@
                 } else if (catLower.includes('food') || catLower.includes('meal') || nameLower.includes('beans') || nameLower.includes('ugali') || nameLower.includes('burger') || nameLower.includes('cake') || nameLower.includes('chicken') || nameLower.includes('rice') || nameLower.includes('githeri')) {
                     iconHtml = '<i class="fas fa-utensils" style="color: var(--accent-magenta); font-size: 1.2rem;"></i>';
                 }
-                
+
+                // Does this item currently qualify for any active auto-discount rule (any platform, right now)?
+                const matchingRules = rulesForItemNow(item.id);
+                const tileDiscount = bestItemTileDiscount(item);
+                const discountRibbon = matchingRules.length ? (() => {
+                    const tip = matchingRules
+                        .map(r => `${r.name}: ${r.discount_type === 'percentage' ? r.discount_value + '%' : 'KES ' + r.discount_value} off${r.platform ? ' on ' + r.platform : ' (all platforms)'}`)
+                        .join(' | ')
+                        .replace(/"/g, '&quot;');
+                    return `<span title="${tip}" style="position:absolute; top:-8px; left:10px; background:#dc2626; color:white; font-size:0.68rem; font-weight:800; padding:0.2rem 0.55rem; border-radius:999px; box-shadow:0 2px 6px rgba(0,0,0,0.35); z-index:2; display:inline-flex; align-items:center; gap:0.25rem; white-space:nowrap;"><i class="fas fa-tag"></i> Discount</span>`;
+                })() : '';
+
+                const priceHtml = tileDiscount
+                    ? `<span style="display:flex; flex-direction:column; align-items:flex-end; line-height:1.2;">
+                           <span style="text-decoration:line-through; color: rgba(255,255,255,0.55); font-size:0.78rem;">${formatCurrency(tileDiscount.originalPrice)}</span>
+                           <strong style="color:#22c55e; font-size:1.1rem;">${formatCurrency(tileDiscount.finalPrice)}</strong>
+                       </span>`
+                    : `<strong style="color: var(--accent-cyan); font-size: 1.1rem;">${formatCurrency(item.selling_price)}</strong>`;
+
                 return `
                     <div class="product-card ${isSelected ? 'selected-highlight' : ''}" onclick="addToCart(${item.id})" style="cursor: pointer; position: relative;">
+                        ${discountRibbon}
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div style="display:flex; align-items:center; gap:0.6rem;">
                                 ${iconHtml}
@@ -444,7 +703,7 @@
                         </div>
                         <div class="product-meta" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.5rem;">
                             <span style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">${item.category || 'Food & Drink'}</span>
-                            <strong style="color: var(--accent-cyan); font-size: 1.1rem;">${formatCurrency(item.selling_price)}</strong>
+                            ${priceHtml}
                         </div>
                     </div>
                 `;
@@ -467,40 +726,73 @@
 
         function renderCart() {
             const cartList = document.getElementById('cartItems');
+            const totalOriginalEl = document.getElementById('orderTotalOriginal');
             if (cart.length === 0) {
                 cartList.innerHTML = '<p style="color: rgba(255,255,255,0.75); text-align: center;">No items selected</p>';
-                document.getElementById('orderTotal').textContent = 'KES 0';
+                document.getElementById('orderTotal').textContent = formatCurrency(0);
+                document.getElementById('orderTotal').style.color = '#ffffff';
+                if (totalOriginalEl) totalOriginalEl.style.display = 'none';
                 document.getElementById('checkoutBtn').disabled = true;
+                renderDiscountPreview();
                 return;
             }
 
-            let total = 0;
-            const platform = document.getElementById('orderPlatform')?.value || 'none';
+            let totalEffective = 0;
+            let totalBase = 0;
+            const platform = (typeof currentMethod !== 'undefined' && currentMethod === 'platform')
+                ? (document.getElementById('orderPlatform')?.value || 'none')
+                : (document.getElementById('orderPlatform')?.value || 'none');
             
             cartList.innerHTML = cart.map((item, index) => {
-                let price = Number(item.selling_price);
-                if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
-                if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
-                if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
-                if (platform === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
+                const discInfo = getItemDiscountInfo(item, platform);
+                const unitPrice = discInfo.finalPrice;
+                const basePrice = discInfo.basePrice;
+                const lineTotal = unitPrice * item.quantity;
+                const lineBaseTotal = basePrice * item.quantity;
+                
+                totalEffective += lineTotal;
+                totalBase += lineBaseTotal;
 
-                total += price * item.quantity;
                 return `
                     <div class="cart-item">
                         <div class="cart-item-details">
-                            <div class="cart-item-name">${item.name}</div>
-                            <div class="cart-item-price">${formatCurrency(price)} x ${item.quantity}</div>
+                            <div class="cart-item-name">
+                                ${item.name}
+                                ${discInfo.hasDiscount ? ' <span style="color:#22c55e; font-weight:700; font-size:0.75rem;"><i class="fas fa-tag"></i> Discounted</span>' : ''}
+                            </div>
+                            <div class="cart-item-price">
+                                <span style="font-weight:700; color: ${discInfo.hasDiscount ? '#22c55e' : 'inherit'}; font-size:0.95rem;">${formatCurrency(unitPrice)}</span> x ${item.quantity}
+                                ${discInfo.hasDiscount ? `<span style="text-decoration:line-through; text-decoration-color:rgba(255,255,255,0.7); opacity:0.75; font-size:0.8rem; margin-left:0.4rem;">${formatCurrency(basePrice)}</span>` : ''}
+                            </div>
                         </div>
                         <div class="cart-item-actions">
-                            <span class="cart-item-total">${formatCurrency(price * item.quantity)}</span>
+                            <span style="text-align:right;">
+                                ${discInfo.hasDiscount ? `<span style="display:block; text-decoration:line-through; text-decoration-color:rgba(255,255,255,0.7); opacity:0.75; font-size:0.8rem; line-height:1.2;">${formatCurrency(lineBaseTotal)}</span>` : ''}
+                                <span class="cart-item-total" style="${discInfo.hasDiscount ? 'color:#22c55e; font-weight:800; font-size:1.05rem;' : ''}">${formatCurrency(lineTotal)}</span>
+                            </span>
                             <button onclick="removeFromCart(${index})" class="cart-item-remove"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
                 `;
             }).join('');
 
-            document.getElementById('orderTotal').textContent = formatCurrency(total);
+            const orderTotalEl = document.getElementById('orderTotal');
+            const hasAnyDiscount = totalEffective < totalBase;
+
+            if (hasAnyDiscount) {
+                if (totalOriginalEl) {
+                    totalOriginalEl.textContent = formatCurrency(totalBase);
+                    totalOriginalEl.style.display = 'inline';
+                }
+                orderTotalEl.textContent = formatCurrency(totalEffective);
+                orderTotalEl.style.color = '#22c55e';
+            } else {
+                if (totalOriginalEl) totalOriginalEl.style.display = 'none';
+                orderTotalEl.textContent = formatCurrency(totalEffective);
+                orderTotalEl.style.color = '#ffffff';
+            }
             document.getElementById('checkoutBtn').disabled = false;
+            renderDiscountPreview();
         }
 
         function updateCartPrices() {
@@ -515,6 +807,7 @@
 
         document.getElementById('checkoutBtn').onclick = () => {
             setPaymentMethod('mpesa_offline');
+            updateCheckoutDiscountCalc();
             document.getElementById('checkoutModal').style.display = 'flex';
         };
 
@@ -557,6 +850,8 @@
                 platformFields.style.display = 'block';
                 btn.textContent = 'Record Delivery Order';
             }
+            renderDiscountPreview();
+            updateCheckoutDiscountCalc();
         }
 
         let __incomingModalOpen = false;
@@ -564,7 +859,7 @@
         let __incomingOrderId = null;
         let __incomingOrderTotal = null;
         let __incomingCustomerName = '';
-
+        let __lastCompletedOrderId = null;
 
         function closePostCheckoutModal() {
             document.getElementById('postCheckoutModal').style.display = 'none';
@@ -577,7 +872,110 @@
             loadMenu();
         }
 
+        async function printPostCheckoutReceipt() {
+            if (!__lastCompletedOrderId) return;
+            try {
+                const res = await apiFetch(`/orders/${__lastCompletedOrderId}`);
+                const order = res.data;
+
+                const printWindow = window.open('', '_blank', 'width=400,height=600');
+                if (!printWindow) return alert('Pop-up blocked. Please allow pop-ups for this site.');
+
+                // Trigger cash drawer open (silently ignore if printer not configured)
+                try { await apiFetch('/settings/open-drawer', { method: 'POST' }); } catch (_) {}
+
+                const itemsHtml = (order.items || []).map(i => `
+                    <tr>
+                        <td style="padding: 5px 0;">${i.name} x${i.quantity}</td>
+                        <td style="text-align: right; padding: 5px 0;">${formatCurrency(i.subtotal)}</td>
+                    </tr>
+                `).join('');
+
+                const hotelName = order.hotel_name || 'TABARUQ FOODS';
+                const phoneNum = order.phone_number || '';
+                const addressStr = order.address || '';
+                const cashierName = order.cashier_name || 'System';
+                const paybillNum = order.mpesa_paybill || '600000';
+                const tillNum = order.mpesa_till || '174379';
+                const footerMsg = order.footer_message || 'Thank you for dining with us!';
+
+                const hasDiscount = Number(order.discount_amount) > 0;
+                const subtotal = order.original_total_amount != null 
+                    ? Number(order.original_total_amount) 
+                    : ((order.items && order.items.length) 
+                        ? order.items.reduce((s, it) => s + (Number(it.subtotal) || (Number(it.price) * Number(it.quantity))), 0) 
+                        : (Number(order.total_amount) + (hasDiscount ? Number(order.discount_amount) : 0)));
+
+                let discountLabel = 'Discount';
+                if (order.discount_type === 'percentage' && Number(order.discount_value) > 0) {
+                    discountLabel = `Discount (${Number(order.discount_value)}%)`;
+                } else if (order.discount_source === 'auto' && order.discount_reason) {
+                    discountLabel = `Discount (${order.discount_reason.replace(/^Auto:\s*/, '')})`;
+                } else if (order.discount_reason) {
+                    discountLabel = `Discount (${order.discount_reason})`;
+                }
+
+                printWindow.document.write(`
+                    <html>
+                    <head>
+                        <title>Receipt #${order.id}</title>
+                        <style>
+                            body { font-family: 'Courier New', Courier, monospace; font-size: 14px; padding: 20px; color: #000; }
+                            .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+                            .footer { text-align: center; border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; font-size: 12px; }
+                            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+                            .total { font-weight: bold; font-size: 16px; border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; text-align: right; }
+                            .meta-item { display: flex; justify-content: space-between; margin: 3px 0; font-size: 13px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2 style="margin: 0; font-size: 18px; letter-spacing: 1px;">${hotelName}</h2>
+                            ${addressStr ? `<p style="margin: 3px 0 0 0; font-size: 12px;">${addressStr}</p>` : ''}
+                            ${phoneNum ? `<p style="margin: 3px 0 0 0; font-size: 12px;">Tel: ${phoneNum}</p>` : ''}
+                            <p style="margin: 5px 0 0 0; font-size: 12px;">*** RECEIPT / BILL ***</p>
+                        </div>
+                        <div style="margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 8px;">
+                            <div class="meta-item"><span>Order ID:</span> <strong>#${order.id}</strong></div>
+                            <div class="meta-item"><span>Date:</span> <span>${new Date(order.created_at).toLocaleString()}</span></div>
+                            <div class="meta-item"><span>Cashier:</span> <strong>${cashierName}</strong></div>
+                            <div class="meta-item"><span>Customer:</span> <span>${order.customer_name || 'Guest'}</span></div>
+                        </div>
+                        <table>
+                            <tbody>
+                                ${itemsHtml}
+                            </tbody>
+                        </table>
+                        ${hasDiscount ? `
+                        <div style="border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; font-size: 13px;">
+                            <div class="meta-item"><span>Subtotal:</span> <span>${formatCurrency(subtotal)}</span></div>
+                            <div class="meta-item" style="font-weight: bold;"><span>${discountLabel}:</span> <span>-${formatCurrency(order.discount_amount)}</span></div>
+                        </div>
+                        ` : ''}
+                        <div class="total">Total Amount: ${formatCurrency(order.total_amount)}</div>
+                        ${(order.payment_method) ? `
+                        <div class="meta-item" style="margin-top: 6px; font-size: 12px;"><span>Payment:</span> <strong>${order.payment_method}${order.transaction_id ? ' (' + order.transaction_id + ')' : ''}</strong></div>
+                        ` : ''}
+                        <div style="margin-top: 15px; border-top: 1px dashed #000; padding-top: 8px; font-size: 13px;">
+                            <div class="meta-item"><span>M-Pesa Paybill:</span> <strong>${paybillNum}</strong></div>
+                            <div class="meta-item"><span>Account Number:</span> <strong>${tillNum}</strong></div>
+                        </div>
+                        <div class="footer">
+                            <p style="margin: 5px 0;">${footerMsg}</p>
+                            <p style="margin: 5px 0;">Powered by TABARUQ Foods POS</p>
+                        </div>
+                        <script>
+                            window.onload = function() { window.print(); window.close(); }
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
+            } catch (err) { alert('Failed to print receipt: ' + err.message); }
+        }
+
         async function showPostCheckoutModal(orderId) {
+            __lastCompletedOrderId = orderId;
             try {
                 const resp = await apiFetch(`/orders/${orderId}`);
                 const order = resp.data;
@@ -587,6 +985,16 @@
                 document.getElementById('postModalCustomer').textContent = order.customer_name || 'Guest';
                 document.getElementById('postModalDate').textContent = new Date(order.created_at).toLocaleString();
                 document.getElementById('postModalTotal').textContent = formatCurrency(order.total_amount);
+
+                const discountEl = document.getElementById('postModalDiscount');
+                if (Number(order.discount_amount) > 0) {
+                    const label = order.discount_source === 'auto' ? `Auto-discount (${(order.discount_reason || '').replace(/^Auto:\s*/, '') || 'rule'})` : (order.discount_reason ? `Discount (${order.discount_reason})` : 'Discount applied');
+                    discountEl.style.display = 'block';
+                    discountEl.innerHTML = `<i class="fas fa-tags"></i> ${label}: -${formatCurrency(order.discount_amount)} (was ${formatCurrency(order.original_total_amount)})`;
+                } else {
+                    discountEl.style.display = 'none';
+                    discountEl.innerHTML = '';
+                }
                 
                 const itemsBody = document.getElementById('postModalItems');
                 itemsBody.innerHTML = items.map(i => `
@@ -646,11 +1054,16 @@
         }
 
         function finishCheckoutAfterIncoming() {
+            const completedOid = __incomingOrderId;
             cart = [];
             renderCart();
             closeIncomingMpesaModal({ success: true });
             loadMenu();
-            alert('Order completed.');
+            if (completedOid) {
+                showPostCheckoutModal(completedOid);
+            } else {
+                alert('Order completed.');
+            }
         }
 
         async function submitIncomingManual() {
@@ -700,18 +1113,20 @@
                 return;
             }
 
+            const orderPayload = {
+                items: cart,
+                total_amount: total,
+                customer_name: customerName,
+                platform: platform !== 'none' ? platform : null,
+                platform_order_id,
+                scheduled_for,
+            };
+
             btn.disabled = true;
             try {
                 const orderResp = await apiFetch('/orders', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        items: cart,
-                        total_amount: total,
-                        customer_name: customerName,
-                        platform: platform !== 'none' ? platform : null,
-                        platform_order_id,
-                        scheduled_for,
-                    }),
+                    body: JSON.stringify(orderPayload),
                 });
                 window.location.href = `orders.html?pendingOrder=${encodeURIComponent(orderResp.orderId)}`;
             } catch (err) {
@@ -754,31 +1169,37 @@
                 }
             }
 
+            const orderPayload = { 
+                items: cart, 
+                total_amount: total, 
+                customer_name: customerName,
+                platform: platform !== 'none' ? platform : null,
+                platform_order_id: platform_order_id,
+                scheduled_for: scheduled_for
+            };
+
             try {
                 const orderResp = await apiFetch('/orders', {
                     method: 'POST',
-                    body: JSON.stringify({ 
-                        items: cart, 
-                        total_amount: total, 
-                        customer_name: customerName,
-                        platform: platform !== 'none' ? platform : null,
-                        platform_order_id: platform_order_id,
-                        scheduled_for: scheduled_for
-                    })
+                    body: JSON.stringify(orderPayload)
                 });
 
+                const finalPayAmount = (orderResp.total_amount != null) 
+                    ? Number(orderResp.total_amount) 
+                    : (orderResp.data?.total_amount != null ? Number(orderResp.data.total_amount) : total);
+
                 if (currentMethod === 'mpesa_offline') {
-                    openIncomingMpesaModal(orderResp.orderId, total, customerName, { fromCheckout: true });
+                    openIncomingMpesaModal(orderResp.orderId, finalPayAmount, customerName, { fromCheckout: true });
                 } else if (currentMethod === 'cash') {
                     await apiFetch('/payments/cash', {
                         method: 'POST',
-                        body: JSON.stringify({ orderId: orderResp.orderId, amount: total })
+                        body: JSON.stringify({ orderId: orderResp.orderId, amount: finalPayAmount })
                     });
                     showPostCheckoutModal(orderResp.orderId);
                 } else if (currentMethod === 'bank') {
                     await apiFetch('/payments/bank', {
                         method: 'POST',
-                        body: JSON.stringify({ orderId: orderResp.orderId, amount: total, transaction_id: bankConfirmationCode })
+                        body: JSON.stringify({ orderId: orderResp.orderId, amount: finalPayAmount, transaction_id: bankConfirmationCode })
                     });
                     showPostCheckoutModal(orderResp.orderId);
                 } else if (currentMethod === 'platform') {

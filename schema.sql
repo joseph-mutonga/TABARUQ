@@ -139,9 +139,19 @@ CREATE TABLE IF NOT EXISTS orders (
     platform_order_id VARCHAR(100) DEFAULT NULL,
     scheduled_for TIMESTAMP NULL DEFAULT NULL,
     scheduled_released TINYINT(1) DEFAULT 0,
+    original_total_amount DECIMAL(10, 2) DEFAULT NULL, -- pre-discount total, set only when a discount is applied
+    discount_type ENUM('none', 'percentage', 'fixed') NOT NULL DEFAULT 'none',
+    discount_value DECIMAL(10, 2) NOT NULL DEFAULT 0.00, -- the % or fixed KES value the admin entered
+    discount_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00, -- resulting KES amount deducted from original_total_amount
+    discount_reason VARCHAR(255) DEFAULT NULL,
+    discount_given_by INT DEFAULT NULL,
+    discount_given_at TIMESTAMP NULL DEFAULT NULL,
+    discount_source ENUM('manual', 'auto') DEFAULT NULL, -- how the discount was applied: by an admin, or automatically by a discount rule
+    discount_rule_id INT DEFAULT NULL, -- the discount_rules row that auto-applied this discount, if any
     UNIQUE KEY platform_order (platform, platform_order_id),
     INDEX idx_orders_created_at (created_at),
-    FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (discount_given_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- 10. Order Items table
@@ -278,6 +288,37 @@ CREATE TABLE IF NOT EXISTS receipt_settings (
     printer_port INT DEFAULT 9100
 );
 
+-- 21. Discount Settings table
+CREATE TABLE IF NOT EXISTS discount_settings (
+    id INT PRIMARY KEY DEFAULT 1,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    max_percentage DECIMAL(5, 2) NOT NULL DEFAULT 100.00,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 22. Discount Rules table (platform-wide / food-specific / time-of-day / day-of-week automatic discounts)
+CREATE TABLE IF NOT EXISTS discount_rules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    platform VARCHAR(50) DEFAULT NULL, -- NULL = applies to every online platform
+    item_id INT DEFAULT NULL,          -- NULL applies to the whole order total, set applies only to that food item's line amount
+    discount_type ENUM('percentage', 'fixed') NOT NULL DEFAULT 'percentage',
+    discount_value DECIMAL(10, 2) NOT NULL,
+    days_of_week VARCHAR(20) DEFAULT NULL, -- comma separated 0-6 (0=Sunday), NULL = every day
+    start_time TIME DEFAULT NULL,
+    end_time TIME DEFAULT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_by INT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_discount_rules_active (is_active),
+    INDEX idx_discount_rules_platform (platform),
+    FOREIGN KEY (item_id) REFERENCES inventory(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+ALTER TABLE orders ADD CONSTRAINT fk_orders_discount_rule FOREIGN KEY (discount_rule_id) REFERENCES discount_rules(id) ON DELETE SET NULL;
+
 -- Seed initial values for platforms
 INSERT IGNORE INTO platform_commissions (platform, commission_percentage) VALUES 
     ('Uber Eats', 0.00),
@@ -288,6 +329,9 @@ INSERT IGNORE INTO platform_commissions (platform, commission_percentage) VALUES
 -- Seed initial receipt settings
 INSERT IGNORE INTO receipt_settings (id, hotel_name, mpesa_paybill, mpesa_till, footer_message)
 VALUES (1, 'TABARUQ FOODS', '600000', '174379', 'Thank you for dining with us!');
+
+-- Seed initial discount settings
+INSERT IGNORE INTO discount_settings (id, enabled, max_percentage) VALUES (1, 1, 100.00);
 
 -- Insert default admin user (password: admin123) if it does not already exist
 INSERT IGNORE INTO users (id, username, password, role) VALUES (1, 'admin', '$2a$10$Xm7B4g1xX.G6tU8j5n4WyeFwBvT/O6S0fXfG5hZ5K5uN9E6aZ0eGi', 'admin');

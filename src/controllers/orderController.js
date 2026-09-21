@@ -1,8 +1,23 @@
 const db = require('../config/db');
 const { getOpenShift } = require('./shiftController');
+const { computeAutoDiscount } = require('../utils/discountRules');
+
+// Flags an order as belonging to a "repeat" customer by matching customer_name (case/whitespace
+// insensitive) against earlier orders. Generic placeholder names (Guest, "<Platform> Order", etc.)
+// are excluded to avoid false positives for orders where no real customer name was captured.
+const REPEAT_CUSTOMER_SQL = `(CASE WHEN o.customer_name IS NOT NULL
+        AND TRIM(o.customer_name) NOT IN ('', 'Guest', 'Delivery Customer')
+        AND TRIM(o.customer_name) NOT LIKE '% Order'
+        AND EXISTS (
+            SELECT 1 FROM orders o2
+            WHERE o2.id <> o.id
+              AND LOWER(TRIM(o2.customer_name)) = LOWER(TRIM(o.customer_name))
+              AND o2.created_at < o.created_at
+        ) THEN 1 ELSE 0 END) AS is_repeat_customer`;
+exports.REPEAT_CUSTOMER_SQL = REPEAT_CUSTOMER_SQL;
 
 exports.createOrder = async (req, res) => {
-    const { items, total_amount, customer_name, platform, platform_order_id, isMerge, mergedOrderIds, scheduled_for } = req.body;
+    const { items, total_amount, customer_name, platform, platform_order_id, isMerge, mergedOrderIds, scheduled_for, discount_type, discount_value, discount_reason } = req.body;
     const connection = await db.getConnection();
     
     try {
@@ -30,6 +45,7 @@ exports.createOrder = async (req, res) => {
         }
 
         let calculatedTotal = 0;
+        const resolvedItems = []; // {id, quantity, price} snapshot used later to auto-match discount rules
         for (const item of items) {
             const quantity = Number(item.quantity);
             if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -46,10 +62,79 @@ exports.createOrder = async (req, res) => {
             }[platform];
             if (platformPrice != null && Number(platformPrice) >= 0) price = Number(platformPrice);
             calculatedTotal += quantity * price;
+            resolvedItems.push({ id: Number(item.id), quantity, price });
         }
         const totalAmount = Math.round(calculatedTotal * 100) / 100;
         if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
             throw new Error('Order total must be greater than zero');
+        }
+
+        // ── Discount evaluation (manual checkout discount or automatic discount rule) ──
+        let appliedDiscount = null;
+        let finalTotalAmount = totalAmount;
+
+        const [discountSettingsRows] = await connection.execute('SELECT * FROM discount_settings WHERE id = 1');
+        const discountSettings = discountSettingsRows[0] || { enabled: 1, max_percentage: 100 };
+
+        // 1. Manual discount specified at checkout
+        if (!isMerge && discount_type && ['percentage', 'fixed'].includes(discount_type) && Number(discount_value) > 0) {
+            if (!discountSettings.enabled) {
+                throw new Error('Order discounts are currently disabled in Settings');
+            }
+            const val = Number(discount_value);
+            let discAmt = 0;
+            if (discount_type === 'percentage') {
+                const maxPct = Number(discountSettings.max_percentage) || 100;
+                if (val > maxPct) {
+                    throw new Error(`Discount percentage cannot exceed ${maxPct}%`);
+                }
+                discAmt = Math.round(totalAmount * (val / 100) * 100) / 100;
+            } else {
+                discAmt = Math.round(val * 100) / 100;
+            }
+
+            if (discAmt > 0) {
+                const calcFinal = Math.round((totalAmount - discAmt) * 100) / 100;
+                if (calcFinal <= 0) {
+                    throw new Error('Discount cannot reduce the order total to zero or below');
+                }
+                appliedDiscount = {
+                    source: 'manual',
+                    type: discount_type,
+                    value: val,
+                    amount: discAmt,
+                    reason: discount_reason ? String(discount_reason).trim().substring(0, 255) : 'Checkout discount',
+                    givenBy: req.user.id,
+                    ruleId: null
+                };
+                finalTotalAmount = calcFinal;
+            }
+        }
+
+        // 2. Automatic discount rule fallback (if no manual discount applied)
+        if (!appliedDiscount && !isMerge && discountSettings.enabled) {
+            const autoRule = await computeAutoDiscount(connection, {
+                platform: platform || null,
+                orderTotal: totalAmount,
+                orderItems: resolvedItems,
+                maxPercentage: Number(discountSettings.max_percentage) || 100
+            });
+            if (autoRule) {
+                const calcFinal = Math.round((totalAmount - autoRule.discountAmount) * 100) / 100;
+                if (calcFinal > 0) {
+                    appliedDiscount = {
+                        source: 'auto',
+                        type: autoRule.discountType,
+                        value: autoRule.discountValue,
+                        amount: autoRule.discountAmount,
+                        reason: `Auto: ${autoRule.ruleName}`,
+                        givenBy: null,
+                        ruleId: autoRule.ruleId,
+                        ruleName: autoRule.ruleName
+                    };
+                    finalTotalAmount = calcFinal;
+                }
+            }
         }
 
         let nameToSave = customer_name || (platform ? `${platform} Order` : 'Guest');
@@ -70,12 +155,26 @@ exports.createOrder = async (req, res) => {
         }
 
         const [orderResult] = await connection.execute(
-            'INSERT INTO orders (cashier_id, shift_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [req.user.id, shift?.id || null, totalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased]
+            `INSERT INTO orders (cashier_id, shift_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released,
+                original_total_amount, discount_type, discount_value, discount_amount, discount_reason, discount_given_by, discount_given_at, discount_source, discount_rule_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                req.user.id, shift?.id || null, finalTotalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased,
+                appliedDiscount ? totalAmount : null,
+                appliedDiscount ? (['percentage', 'fixed'].includes(appliedDiscount.type) ? appliedDiscount.type : 'fixed') : 'none',
+                appliedDiscount ? appliedDiscount.value : 0,
+                appliedDiscount ? appliedDiscount.amount : 0,
+                appliedDiscount ? appliedDiscount.reason : null,
+                appliedDiscount ? (appliedDiscount.givenBy || null) : null,
+                appliedDiscount ? new Date() : null,
+                appliedDiscount ? appliedDiscount.source : null,
+                appliedDiscount ? (appliedDiscount.ruleId || null) : null
+            ]
         );
         const orderId = orderResult.insertId;
 
-        // If it's a delivery platform order, insert platform fees based on settings
+        // If it's a delivery platform order, insert platform fees based on settings (computed on the
+        // final, post-discount total since that reflects what will actually be settled by the platform)
         if (platform) {
             const [commissions] = await connection.execute(
                 'SELECT commission_percentage FROM platform_commissions WHERE platform = ?',
@@ -83,7 +182,7 @@ exports.createOrder = async (req, res) => {
             );
             const commissionPct = commissions.length > 0 ? Number(commissions[0].commission_percentage) : 0;
             if (commissionPct > 0) {
-                const feeAmount = totalAmount * (commissionPct / 100);
+                const feeAmount = finalTotalAmount * (commissionPct / 100);
                 await connection.execute(
                     'INSERT INTO platform_fees (order_id, fee_percentage, fee_amount) VALUES (?, ?, ?)',
                     [orderId, commissionPct, feeAmount]
@@ -217,6 +316,17 @@ exports.createOrder = async (req, res) => {
             }
         }
 
+        if (appliedDiscount) {
+            await connection.execute(
+                'INSERT INTO audit_logs (user_id, action, details) VALUES (?, ?, ?)',
+                [
+                    req.user.id,
+                    appliedDiscount.source === 'manual' ? 'Applied checkout discount' : 'Auto-applied discount rule',
+                    `Order #${orderId} (${platform || 'POS'}): ${appliedDiscount.type} discount of ${appliedDiscount.value}${appliedDiscount.type === 'percentage' ? '%' : ''} = KES ${appliedDiscount.amount}. New total: KES ${finalTotalAmount}. Reason: ${appliedDiscount.reason}`
+                ]
+            );
+        }
+
         await connection.commit();
         
         // Emit Real-time Events
@@ -238,13 +348,32 @@ exports.createOrder = async (req, res) => {
                     platform_order_id: platform_order_id || `#${orderId}`,
                     customer_name: nameToSave,
                     items: formattedItems,
-                    total: totalAmount,
+                    total: finalTotalAmount,
                     status: 'pending'
                 });
             }
         }
 
-        res.status(201).json({ success: true, orderId, message: 'Order created successfully' });
+        res.status(201).json({
+            success: true,
+            orderId,
+            total_amount: finalTotalAmount,
+            original_total_amount: appliedDiscount ? totalAmount : null,
+            discount_amount: appliedDiscount ? appliedDiscount.amount : 0,
+            message: appliedDiscount
+                ? `Order created successfully with discount (KES ${appliedDiscount.amount} off).`
+                : 'Order created successfully',
+            data: {
+                orderId,
+                total_amount: finalTotalAmount,
+                original_total_amount: appliedDiscount ? totalAmount : null,
+                discount_amount: appliedDiscount ? appliedDiscount.amount : 0,
+                discount_type: appliedDiscount ? appliedDiscount.type : 'none',
+                discount_value: appliedDiscount ? appliedDiscount.value : 0,
+                discount_reason: appliedDiscount ? appliedDiscount.reason : null,
+                discount_source: appliedDiscount ? appliedDiscount.source : null
+            }
+        });
     } catch (err) {
         await connection.rollback();
         console.error('ERROR IN CREATE_ORDER:', err);
@@ -273,7 +402,7 @@ exports.getOrderDetails = async (req, res) => {
     const { id } = req.params;
     try {
         const [order] = await db.execute(`
-            SELECT o.*, u.username as cashier_name 
+            SELECT o.*, u.username as cashier_name, ${REPEAT_CUSTOMER_SQL}
             FROM orders o 
             LEFT JOIN users u ON o.cashier_id = u.id 
             WHERE o.id = ?
@@ -287,6 +416,14 @@ exports.getOrderDetails = async (req, res) => {
             WHERE oi.order_id = ?
         `, [id]);
 
+        const [payments] = await db.execute(`
+            SELECT payment_method, transaction_id, status, amount
+            FROM payments 
+            WHERE order_id = ? 
+            ORDER BY id DESC LIMIT 1
+        `, [id]);
+        const payment = payments[0] || null;
+
         const [settingsRows] = await db.execute('SELECT * FROM receipt_settings WHERE id = 1');
         const settings = settingsRows[0] || {};
 
@@ -295,6 +432,9 @@ exports.getOrderDetails = async (req, res) => {
             data: { 
                 ...order[0], 
                 items,
+                payment_method: payment ? payment.payment_method : null,
+                transaction_id: payment ? payment.transaction_id : null,
+                payment_amount: payment ? payment.amount : null,
                 hotel_name: settings.hotel_name || 'TABARUQ FOODS',
                 phone_number: settings.phone_number || '',
                 address: settings.address || '',
@@ -460,6 +600,175 @@ exports.deleteScheduledOrder = async (req, res) => {
     } catch (err) {
         await connection.rollback();
         console.error('ERROR IN DELETE_SCHEDULED_ORDER:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    } finally {
+        connection.release();
+    }
+};
+
+// Admin gives (or updates) a discount on an order — mainly used for delivery/online platform
+// orders where the customer was given a discount directly on the platform. Reducing total_amount
+// here means every downstream "expected payment" check (STK push, C2B validation, reconciliation,
+// receipts) automatically uses the discounted figure, so it stays in sync with what is actually collected.
+exports.applyOrderDiscount = async (req, res) => {
+    const { id } = req.params;
+    const { discount_type, discount_value, reason } = req.body;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [settingsRows] = await connection.execute('SELECT * FROM discount_settings WHERE id = 1');
+        const discountSettings = settingsRows[0] || { enabled: 1, max_percentage: 100 };
+        if (!discountSettings.enabled) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Order discounts are currently disabled in Settings' });
+        }
+
+        const [orders] = await connection.execute('SELECT * FROM orders WHERE id = ? FOR UPDATE', [id]);
+        if (orders.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const order = orders[0];
+        if (order.payment_status === 'paid') {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Cannot change the discount on an order that has already been paid' });
+        }
+        if (order.status === 'cancelled' || order.status === 'merged') {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: `Cannot discount a ${order.status} order` });
+        }
+
+        if (!['percentage', 'fixed'].includes(discount_type)) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Discount type must be percentage or fixed' });
+        }
+        const value = Number(discount_value);
+        if (!Number.isFinite(value) || value <= 0) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Discount value must be greater than zero' });
+        }
+
+        // Always discount from the original (pre-discount) total so re-applying a discount doesn't compound.
+        const baseAmount = order.original_total_amount != null ? Number(order.original_total_amount) : Number(order.total_amount);
+
+        let discountAmount;
+        if (discount_type === 'percentage') {
+            const maxPct = Number(discountSettings.max_percentage) || 100;
+            if (value > maxPct) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: `Discount percentage cannot exceed ${maxPct}% (see Settings)` });
+            }
+            discountAmount = Math.round(baseAmount * (value / 100) * 100) / 100;
+        } else {
+            discountAmount = Math.round(value * 100) / 100;
+        }
+
+        const newTotal = Math.round((baseAmount - discountAmount) * 100) / 100;
+        if (newTotal <= 0) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Discount cannot reduce the order total to zero or below' });
+        }
+
+        const trimmedReason = reason ? String(reason).trim().substring(0, 255) : null;
+
+        await connection.execute(
+            `UPDATE orders SET
+                original_total_amount = ?,
+                total_amount = ?,
+                discount_type = ?,
+                discount_value = ?,
+                discount_amount = ?,
+                discount_reason = ?,
+                discount_given_by = ?,
+                discount_given_at = CURRENT_TIMESTAMP,
+                discount_source = 'manual',
+                discount_rule_id = NULL
+             WHERE id = ?`,
+            [baseAmount, newTotal, discount_type, value, discountAmount, trimmedReason, req.user.id, id]
+        );
+
+        await connection.execute(
+            'INSERT INTO audit_logs (user_id, action, details) VALUES (?, ?, ?)',
+            [
+                req.user.id,
+                'Applied order discount',
+                `Order #${id} (${order.platform || 'walk-in'}): ${discount_type} discount of ${value}${discount_type === 'percentage' ? '%' : ''} = KES ${discountAmount}. New total: KES ${newTotal}. Reason: ${trimmedReason || 'N/A'}`
+            ]
+        );
+
+        await connection.commit();
+
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'discount', orderId: Number(id) });
+
+        res.json({
+            success: true,
+            message: 'Discount applied successfully',
+            data: { id: Number(id), original_total_amount: baseAmount, total_amount: newTotal, discount_amount: discountAmount }
+        });
+    } catch (err) {
+        await connection.rollback();
+        console.error('applyOrderDiscount error:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    } finally {
+        connection.release();
+    }
+};
+
+// Removes a previously applied discount, restoring the order's original total_amount.
+exports.removeOrderDiscount = async (req, res) => {
+    const { id } = req.params;
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [orders] = await connection.execute('SELECT * FROM orders WHERE id = ? FOR UPDATE', [id]);
+        if (orders.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const order = orders[0];
+        if (order.discount_type === 'none' || order.original_total_amount == null) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'This order has no discount to remove' });
+        }
+        if (order.payment_status === 'paid') {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Cannot change the discount on an order that has already been paid' });
+        }
+
+        const restoredTotal = Number(order.original_total_amount);
+        await connection.execute(
+            `UPDATE orders SET
+                total_amount = ?,
+                original_total_amount = NULL,
+                discount_type = 'none',
+                discount_value = 0,
+                discount_amount = 0,
+                discount_reason = NULL,
+                discount_given_by = NULL,
+                discount_given_at = NULL,
+                discount_source = NULL,
+                discount_rule_id = NULL
+             WHERE id = ?`,
+            [restoredTotal, id]
+        );
+
+        await connection.execute(
+            'INSERT INTO audit_logs (user_id, action, details) VALUES (?, ?, ?)',
+            [req.user.id, 'Removed order discount', `Order #${id}: discount removed, total restored to KES ${restoredTotal}`]
+        );
+
+        await connection.commit();
+
+        const io = req.app.get('io');
+        if (io) io.emit('order_update', { type: 'discount', orderId: Number(id) });
+
+        res.json({ success: true, message: 'Discount removed', data: { id: Number(id), total_amount: restoredTotal } });
+    } catch (err) {
+        await connection.rollback();
+        console.error('removeOrderDiscount error:', err);
         res.status(500).json({ success: false, message: 'Server error: ' + err.message });
     } finally {
         connection.release();
