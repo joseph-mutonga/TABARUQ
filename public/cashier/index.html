@@ -34,10 +34,13 @@
             <div class="glass-card" style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     <div>
-                        <h3 style="margin: 0; color: #ffffff; font-weight: 800;">Production</h3>
-                        <p class="card-small" style="margin: 0.25rem 0 0; color: rgba(255,255,255,0.8);">Record produced stock for the day.</p>
+                        <h3 style="margin: 0; color: #ffffff; font-weight: 800;">Quick Actions</h3>
+                        <p class="card-small" style="margin: 0.25rem 0 0; color: rgba(255,255,255,0.8);">Record produced daily stock or record petty cash and operational expenses.</p>
                     </div>
-                    <button class="btn btn-primary" onclick="openProductionModal()">Record Production</button>
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                        <button class="btn" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; font-weight: 700;" onclick="openExpenseModal()"><i class="fas fa-wallet" style="margin-right: 0.35rem;"></i> Record Expense</button>
+                        <button class="btn btn-primary" onclick="openProductionModal()"><i class="fas fa-boxes" style="margin-right: 0.35rem;"></i> Record Production</button>
+                    </div>
                 </div>
             </div>
 
@@ -288,6 +291,50 @@
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
                     <button type="button" class="btn" style="background: #64748b; color: white;" onclick="document.getElementById('productionModal').style.display='none'">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Record Expense Modal (Cashier POS) -->
+    <div id="expenseModal" style="display:none; position: fixed; inset:0; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index: 2500; padding: 1rem;">
+        <div class="glass-card" style="width: 440px; max-width: 92vw;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="margin: 0; color: #ffffff; font-weight: 800;"><i class="fas fa-wallet" style="margin-right: 0.5rem; color: var(--accent-cyan);"></i> Record Expense</h3>
+                <button type="button" style="background: none; border: none; color: #fff; font-size: 1.25rem; cursor: pointer;" onclick="closeExpenseModal()">&times;</button>
+            </div>
+            <form id="posExpenseForm">
+                <div class="form-group">
+                    <label>Amount (KES) *</label>
+                    <input type="number" id="posExpAmount" class="form-control" placeholder="e.g. 500" min="1" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Category *</label>
+                    <select id="posExpCategory" class="form-control" required>
+                        <option value="Ingredients & Supplies">Ingredients & Supplies</option>
+                        <option value="Beverage & Drinks">Beverage & Drinks</option>
+                        <option value="Packaging & Materials">Packaging & Materials</option>
+                        <option value="Gas & Fuel">Gas & Fuel</option>
+                        <option value="Transport / Rider Fare">Transport / Rider Fare</option>
+                        <option value="Utilities">Utilities (Electricity / Water / Internet)</option>
+                        <option value="Cleaning Supplies">Cleaning Supplies</option>
+                        <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+                        <option value="Salaries">Salaries & Wages</option>
+                        <option value="Rent">Rent</option>
+                        <option value="Other" selected>Petty Cash / Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Description / Reason *</label>
+                    <input type="text" id="posExpDesc" class="form-control" placeholder="e.g. Bought cooking oil 5L / Rider fare" required>
+                </div>
+                <div class="form-group">
+                    <label>Date *</label>
+                    <input type="date" id="posExpDate" class="form-control" required>
+                </div>
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn" style="background: #64748b; color: white;" onclick="closeExpenseModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="posSaveExpenseBtn"><i class="fas fa-save" style="margin-right: 0.35rem;"></i> Save Expense</button>
                 </div>
             </form>
         </div>
@@ -614,6 +661,49 @@
             document.getElementById('scheduledNavLink').style.display = 'block';
             document.getElementById('deliveryNavLink').style.display = 'block';
         }
+
+        function openExpenseModal() {
+            document.getElementById('posExpDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('posExpAmount').value = '';
+            document.getElementById('posExpDesc').value = '';
+            document.getElementById('expenseModal').style.display = 'flex';
+        }
+
+        function closeExpenseModal() {
+            document.getElementById('expenseModal').style.display = 'none';
+        }
+
+        document.getElementById('posExpenseForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('posExpAmount').value);
+            const category = document.getElementById('posExpCategory').value;
+            const description = document.getElementById('posExpDesc').value.trim();
+            const expense_date = document.getElementById('posExpDate').value;
+
+            if (!amount || isNaN(amount) || amount <= 0) {
+                alert('Please enter a valid expense amount.');
+                return;
+            }
+            if (!description) {
+                alert('Please enter a description for the expense.');
+                return;
+            }
+
+            const btn = document.getElementById('posSaveExpenseBtn');
+            try {
+                if (btn) btn.disabled = true;
+                await apiFetch('/expenses', {
+                    method: 'POST',
+                    body: JSON.stringify({ amount, category, description, expense_date })
+                });
+                closeExpenseModal();
+                showToast('Expense recorded successfully.');
+            } catch (err) {
+                alert('Failed to record expense: ' + err.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
 
         async function loadMenu() {
             try {

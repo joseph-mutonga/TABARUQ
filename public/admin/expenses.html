@@ -7,66 +7,96 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="../css/style.css?v=5">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .category-badge {
+            display: inline-block;
+            padding: 0.25rem 0.65rem;
+            border-radius: 9999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #f1f5f9;
+        }
+        .user-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        .expense-desc-cell {
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            font-size: 0.95rem !important;
+            text-transform: none !important;
+            line-height: 1.45 !important;
+            min-width: 260px;
+            max-width: 480px;
+            word-break: break-word;
+            white-space: normal;
+        }
+    </style>
 </head>
 <body>
     <div class="layout">
         <aside class="sidebar">
             <h2>TABARUQ</h2>
-            <ul class="nav-links">
-                <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
-                <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
-                <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
-                <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
-                <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
-                <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
-                <li><a href="stocks.html"><i class="fas fa-warehouse"></i> Stocks</a></li>
-                <li><a href="expenses.html" class="active"><i class="fas fa-wallet"></i> Expenses</a></li>
-                <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
-                <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
-                
-                <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
-                <li><a href="discounts.html"><i class="fas fa-percent"></i> Discounts</a></li>
-                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
-                <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            <ul class="nav-links" id="sidebarLinks">
+                <!-- Dynamically populated based on role -->
             </ul>
         </aside>
 
         <main class="container">
-            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Expense Management</h1>
-                <button class="btn btn-primary" onclick="document.getElementById('expenseModal').style.display='flex'">Record Expense</button>
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2); margin: 0;">Expense Management</h1>
+                    <p class="card-small" style="color: rgba(255,255,255,0.8); margin: 0.35rem 0 0;">Record business expenses, supplies restock, and operational payouts.</p>
+                </div>
+                <button class="btn btn-primary" onclick="openExpenseModal()"><i class="fas fa-plus-circle" style="margin-right: 0.4rem;"></i> Record Expense</button>
             </header>
 
             <div class="overview-grid" style="margin-bottom: 2rem;">
                 <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
                     <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar-day"></i><span>Today</span></div>
-                    <div class="card-value" id="expToday" style="font-size: 1.5rem;">KES 0</div>
+                    <div class="card-value" id="expToday" style="font-size: 1.5rem; color: #f87171;">KES 0</div>
                 </div>
                 <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
                     <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar-week"></i><span>This Week</span></div>
-                    <div class="card-value" id="expWeek" style="font-size: 1.5rem;">KES 0</div>
+                    <div class="card-value" id="expWeek" style="font-size: 1.5rem; color: #fb923c;">KES 0</div>
                 </div>
                 <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
                     <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar-alt"></i><span>This Month</span></div>
-                    <div class="card-value" id="expMonth" style="font-size: 1.5rem;">KES 0</div>
+                    <div class="card-value" id="expMonth" style="font-size: 1.5rem; color: #facc15;">KES 0</div>
                 </div>
                 <div class="dashboard-card" style="background: rgba(255,255,255,0.05);">
                     <div class="card-title" style="color: rgba(255,255,255,0.7);"><i class="fas fa-calendar"></i><span>This Year</span></div>
-                    <div class="card-value" id="expYear" style="font-size: 1.5rem;">KES 0</div>
+                    <div class="card-value" id="expYear" style="font-size: 1.5rem; color: #60a5fa;">KES 0</div>
                 </div>
             </div>
 
             <div class="glass-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+                    <h3 style="color: #ffffff; font-weight: 700; margin: 0;"><i class="fas fa-list-alt" style="margin-right: 0.5rem; color: var(--accent-cyan);"></i> Recorded Expenses</h3>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" id="expenseSearch" class="form-control" placeholder="Search description/category..." style="max-width: 250px; padding: 0.45rem 0.75rem; font-size: 0.85rem;" oninput="filterExpenseTable()">
+                    </div>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Category</th>
-                                <th>Description</th>
-                                <th>Amount</th>
-                                <th>Recorded By</th>
-                                <th>Actions</th>
+                                <th style="min-width: 110px;">Date</th>
+                                <th style="min-width: 150px;">Category</th>
+                                <th style="min-width: 260px;">Description</th>
+                                <th style="min-width: 120px;">Amount</th>
+                                <th style="min-width: 130px;">Recorded By</th>
+                                <th style="min-width: 80px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="expenseBody"></tbody>
@@ -76,101 +106,209 @@
         </main>
     </div>
 
-    <!-- Modal -->
-    <div id="expenseModal" style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index: 1000;">
-        <div class="glass-card" style="width: 400px;">
-            <h2 style="color: #ffffff; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.15);">Record Expense</h2>
+    <!-- Expense Modal -->
+    <div id="expenseModal" style="display:none; position: fixed; inset:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index: 1000; padding: 1rem;">
+        <div class="glass-card" style="width: 440px; max-width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                <h2 style="color: #ffffff; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.15); margin: 0;"><i class="fas fa-wallet" style="margin-right: 0.5rem; color: var(--accent-cyan);"></i> Record Expense</h2>
+                <button type="button" style="background: none; border: none; color: #fff; font-size: 1.35rem; cursor: pointer;" onclick="closeExpenseModal()">&times;</button>
+            </div>
             <form id="expenseForm">
                 <div class="form-group">
-                    <label>Amount</label>
-                    <input type="number" id="expAmount" class="form-control" required>
+                    <label>Amount (KES) *</label>
+                    <input type="number" id="expAmount" class="form-control" placeholder="e.g. 500" min="1" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label>Category</label>
-                    <select id="expCategory" class="form-control">
-                        <option>Salary</option>
-                        <option>Rent</option>
-                        <option>Utilities</option>
-                        <option>Stock Purchase</option>
-                        <option>Other</option>
+                    <label>Category *</label>
+                    <select id="expCategory" class="form-control" required>
+                        <option value="Ingredients & Supplies">Ingredients & Supplies</option>
+                        <option value="Beverage & Drinks">Beverage & Drinks</option>
+                        <option value="Packaging & Materials">Packaging & Materials</option>
+                        <option value="Gas & Fuel">Gas & Fuel</option>
+                        <option value="Transport / Rider Fare">Transport / Rider Fare</option>
+                        <option value="Utilities">Utilities (Electricity / Water / Internet)</option>
+                        <option value="Cleaning Supplies">Cleaning Supplies</option>
+                        <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+                        <option value="Salaries">Salaries & Wages</option>
+                        <option value="Rent">Rent</option>
+                        <option value="Other" selected>Petty Cash / Other</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Description</label>
-                    <input type="text" id="expDesc" class="form-control" required>
+                    <label>Description / Reason *</label>
+                    <input type="text" id="expDesc" class="form-control" placeholder="e.g. Bought cooking oil 5L / Rider market fare" required>
                 </div>
                 <div class="form-group">
-                    <label>Date</label>
+                    <label>Date *</label>
                     <input type="date" id="expDate" class="form-control" required>
                 </div>
-                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                    <button type="button" class="btn" style="background: #64748b; color: white; font-weight: 700;" onclick="document.getElementById('expenseModal').style.display='none'">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Expense</button>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn" style="background: #64748b; color: white; font-weight: 700;" onclick="closeExpenseModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveExpenseSubmitBtn"><i class="fas fa-save" style="margin-right: 0.35rem;"></i> Save Expense</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="../js/api.js"></script>
     <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const normalizedRole = String(user?.role || '').toLowerCase();
+        if (!user || normalizedRole !== 'admin') {
+            window.location.href = '../index.html';
+        }
+
+        // Render admin sidebar
+        const sidebarLinks = document.getElementById('sidebarLinks');
+        sidebarLinks.innerHTML = `
+            <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
+            <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
+            <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
+            <li><a href="../cashier/scheduled.html"><i class="fas fa-calendar-alt"></i> Scheduled Orders <span id="scheduledBadge" class="notification-badge" style="display: none;">0</span></a></li>
+            <li><a href="delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+            <li><a href="workers.html"><i class="fas fa-user-tie"></i> Workers & Payroll</a></li>
+            <li><a href="inventory.html"><i class="fas fa-box"></i> Inventory</a></li>
+            <li><a href="stocks.html"><i class="fas fa-warehouse"></i> Stocks</a></li>
+            <li><a href="expenses.html" class="active"><i class="fas fa-wallet"></i> Expenses</a></li>
+            <li><a href="reports.html"><i class="fas fa-chart-line"></i> Reports</a></li>
+            <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
+            <li><a href="users.html"><i class="fas fa-users"></i> Users</a></li>
+            <li><a href="discounts.html"><i class="fas fa-percent"></i> Discounts</a></li>
+            <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
+            <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+        `;
+
+        let allExpenses = [];
+
+        function openExpenseModal() {
+            document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('expAmount').value = '';
+            document.getElementById('expDesc').value = '';
+            document.getElementById('expenseModal').style.display = 'flex';
+        }
+
+        function closeExpenseModal() {
+            document.getElementById('expenseModal').style.display = 'none';
+        }
+
         async function loadExpenses() {
             try {
                 const response = await apiFetch('/expenses');
-                const body = document.getElementById('expenseBody');
-                body.innerHTML = response.data.map(e => `
+                allExpenses = response.data || [];
+                renderExpenseTable(allExpenses);
+                loadStats();
+            } catch (err) {
+                console.error('Error loading expenses:', err);
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function renderExpenseTable(data) {
+            const body = document.getElementById('expenseBody');
+            if (!data || data.length === 0) {
+                body.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2.5rem; color: rgba(255,255,255,0.6);"><i class="fas fa-receipt" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.5;"></i>No expenses recorded yet.</td></tr>`;
+                return;
+            }
+
+            body.innerHTML = data.map(e => {
+                const dateStr = e.expense_date ? new Date(e.expense_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '-';
+                return `
                     <tr>
-                        <td>${new Date(e.expense_date).toLocaleDateString()}</td>
-                        <td>${e.category}</td>
-                        <td>${e.description}</td>
-                        <td style="color: var(--accent-danger); font-weight: 700;">${formatCurrency(e.amount)}</td>
-                        <td><span class="badge" style="background: var(--primary);">${e.creator_name || 'System'}</span></td>
+                        <td><strong style="color: #ffffff;">${dateStr}</strong></td>
+                        <td><span class="category-badge">${escapeHtml(e.category || 'Other')}</span></td>
+                        <td class="expense-desc-cell"><span style="color: #ffffff; font-weight: 600; font-size: 0.95rem; text-shadow: 0 1px 2px rgba(0,0,0,0.25);">${escapeHtml(e.description || '-')}</span></td>
+                        <td style="color: #f87171; font-weight: 700; font-size: 0.95rem;">${formatCurrency(e.amount)}</td>
+                        <td><span class="user-badge"><i class="fas fa-user" style="font-size: 0.7rem;"></i> ${escapeHtml(e.creator_name || 'System')}</span></td>
                         <td>
-                            <button class="btn" style="background: var(--accent-danger); padding: 0.5rem;" onclick="deleteExpense(${e.id})"><i class="fas fa-trash"></i></button>
+                            ${normalizedRole === 'admin' 
+                                ? `<button class="btn" style="background: var(--accent-danger); padding: 0.4rem 0.65rem; font-size: 0.85rem;" onclick="deleteExpense(${e.id})" title="Delete Expense"><i class="fas fa-trash"></i></button>`
+                                : `<span style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">-</span>`
+                            }
                         </td>
                     </tr>
-                `).join('');
-                loadStats(); // Reload summary cards too
-            } catch (err) { alert(err.message); }
+                `;
+            }).join('');
+        }
+
+        function filterExpenseTable() {
+            const q = (document.getElementById('expenseSearch').value || '').toLowerCase().trim();
+            if (!q) {
+                renderExpenseTable(allExpenses);
+                return;
+            }
+            const filtered = allExpenses.filter(e => 
+                (e.description || '').toLowerCase().includes(q) ||
+                (e.category || '').toLowerCase().includes(q) ||
+                (e.creator_name || '').toLowerCase().includes(q)
+            );
+            renderExpenseTable(filtered);
         }
 
         async function loadStats() {
             try {
                 const response = await apiFetch('/expenses/stats');
-                const data = response.data;
+                const data = response.data || {};
                 document.getElementById('expToday').textContent = formatCurrency(data.today || 0);
                 document.getElementById('expWeek').textContent = formatCurrency(data.week || 0);
                 document.getElementById('expMonth').textContent = formatCurrency(data.month || 0);
                 document.getElementById('expYear').textContent = formatCurrency(data.year || 0);
-            } catch (err) { console.error(err); }
+            } catch (err) {
+                console.error('Error loading stats:', err);
+            }
         }
 
         document.getElementById('expenseForm').onsubmit = async (e) => {
             e.preventDefault();
+            const amountVal = parseFloat(document.getElementById('expAmount').value);
             const data = {
-                amount: document.getElementById('expAmount').value,
+                amount: amountVal,
                 category: document.getElementById('expCategory').value,
-                description: document.getElementById('expDesc').value,
+                description: document.getElementById('expDesc').value.trim(),
                 expense_date: document.getElementById('expDate').value
             };
+
+            if (!data.amount || isNaN(data.amount) || data.amount <= 0) {
+                alert('Please enter a valid expense amount.');
+                return;
+            }
+            if (!data.description) {
+                alert('Please enter a description for the expense.');
+                return;
+            }
+
+            const btn = document.getElementById('saveExpenseSubmitBtn');
             try {
+                if (btn) btn.disabled = true;
                 await apiFetch('/expenses', { method: 'POST', body: JSON.stringify(data) });
-                document.getElementById('expenseModal').style.display = 'none';
+                closeExpenseModal();
                 loadExpenses();
-            } catch (err) { alert(err.message); }
+            } catch (err) {
+                alert('Failed to save expense: ' + err.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         };
 
         async function deleteExpense(id) {
-            if (confirm('Delete this expense?')) {
+            if (confirm('Are you sure you want to delete this expense record?')) {
                 try {
                     await apiFetch(`/expenses/${id}`, { method: 'DELETE' });
                     loadExpenses();
-                } catch (err) { alert(err.message); }
+                } catch (err) {
+                    alert(err.message);
+                }
             }
         }
-
-        const user = JSON.parse(localStorage.getItem('user'));
-        const normalizedRole = String(user?.role || '').toLowerCase();
-        if (!user || normalizedRole !== 'admin') window.location.href = '../index.html';
 
         async function checkPendingPayments() {
             try {
@@ -194,6 +332,9 @@
         if (typeof socket !== 'undefined' && socket) {
             socket.on('payment_update', checkPendingPayments);
             socket.on('order_update', checkPendingPayments);
+            socket.on('expense_update', () => {
+                loadExpenses();
+            });
         }
 
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
