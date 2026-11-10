@@ -649,6 +649,13 @@
                             <div class="meta-item" style="font-weight: bold;"><span>${discountLabel}:</span> <span>-${formatCurrency(order.discount_amount)}</span></div>
                         </div>
                         ` : ''}
+                        ${Number(order.delivery_fee) > 0 ? `
+                        <div style="border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; font-size: 13px;">
+                            <div class="meta-item"><span>Delivery Destination:</span> <strong>${order.delivery_location_name || 'Tabaruq Delivery'} (${Number(order.delivery_distance || 0).toFixed(1)} km)</strong></div>
+                            ${order.delivery_address ? `<div class="meta-item"><span>Address:</span> <span>${order.delivery_address}</span></div>` : ''}
+                            <div class="meta-item" style="font-weight: bold;"><span>Transport Fee:</span> <span>+${formatCurrency(order.delivery_fee)}</span></div>
+                        </div>
+                        ` : ''}
                         <div class="total">Total Amount: ${formatCurrency(order.total_amount)}</div>
                         ${(order.payment_method) ? `
                         <div class="meta-item" style="margin-top: 6px; font-size: 12px;"><span>Payment:</span> <strong>${order.payment_method}${order.transaction_id ? ' (' + order.transaction_id + ')' : ''}</strong></div>

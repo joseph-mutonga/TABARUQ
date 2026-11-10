@@ -37,8 +37,47 @@ async function ensureSchemaCompatibility() {
             table: 'settlements',
             column: 'attachment_data',
             query: 'ALTER TABLE settlements ADD COLUMN attachment_data LONGTEXT NULL'
+        },
+        {
+            table: 'orders',
+            column: 'delivery_location_id',
+            query: 'ALTER TABLE orders ADD COLUMN delivery_location_id INT DEFAULT NULL'
+        },
+        {
+            table: 'orders',
+            column: 'delivery_location_name',
+            query: 'ALTER TABLE orders ADD COLUMN delivery_location_name VARCHAR(150) DEFAULT NULL'
+        },
+        {
+            table: 'orders',
+            column: 'delivery_distance',
+            query: 'ALTER TABLE orders ADD COLUMN delivery_distance DECIMAL(6, 2) DEFAULT NULL'
+        },
+        {
+            table: 'orders',
+            column: 'delivery_fee',
+            query: 'ALTER TABLE orders ADD COLUMN delivery_fee DECIMAL(10, 2) NOT NULL DEFAULT 0.00'
+        },
+        {
+            table: 'orders',
+            column: 'delivery_address',
+            query: 'ALTER TABLE orders ADD COLUMN delivery_address VARCHAR(255) DEFAULT NULL'
         }
     ];
+
+    const deliveryLocationsTableSql = `
+        CREATE TABLE IF NOT EXISTS delivery_locations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            location_name VARCHAR(150) NOT NULL,
+            distance_km DECIMAL(6, 2) NOT NULL DEFAULT 0.00,
+            transport_fee DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            notes VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_delivery_locations_active (is_active)
+        )
+    `;
 
     const productionTableSql = `
         CREATE TABLE IF NOT EXISTS production_records (
@@ -75,6 +114,12 @@ async function ensureSchemaCompatibility() {
         await db.execute(productionTableSql);
     } catch (err) {
         console.warn('[Schema] Production table warning:', err.message || err);
+    }
+
+    try {
+        await db.execute(deliveryLocationsTableSql);
+    } catch (err) {
+        console.warn('[Schema] Delivery locations table warning:', err.message || err);
     }
 }
 
@@ -153,3 +198,4 @@ bootstrap().catch((err) => {
     console.error('Bootstrap failed:', err);
     process.exit(1);
 });
+

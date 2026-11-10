@@ -17,11 +17,55 @@ const REPEAT_CUSTOMER_SQL = `(CASE WHEN o.customer_name IS NOT NULL
 exports.REPEAT_CUSTOMER_SQL = REPEAT_CUSTOMER_SQL;
 
 exports.createOrder = async (req, res) => {
-    const { items, total_amount, customer_name, platform, platform_order_id, isMerge, mergedOrderIds, scheduled_for, discount_type, discount_value, discount_reason } = req.body;
+    const {
+        items,
+        total_amount,
+        customer_name,
+        platform: initialPlatform,
+        platform_order_id,
+        isMerge,
+        mergedOrderIds,
+        scheduled_for,
+        discount_type,
+        discount_value,
+        discount_reason,
+        delivery_location_id,
+        delivery_address,
+        is_delivery
+    } = req.body;
     const connection = await db.getConnection();
     
     try {
         await connection.beginTransaction();
+
+        let platform = (initialPlatform && initialPlatform !== 'none') ? initialPlatform : null;
+        const isTabaruqDelivery = platform === 'Tabaruq Delivery' || !!is_delivery || !!delivery_location_id;
+        if (isTabaruqDelivery && (!platform || platform === 'none')) {
+            platform = 'Tabaruq Delivery';
+        }
+
+        // When making a sale for delivery, the cashier must choose the location where the delivery is going
+        if (platform === 'Tabaruq Delivery' && !delivery_location_id) {
+            throw new Error('Please choose the delivery location where the Tabaruq Delivery is going');
+        }
+
+        let deliveryFee = 0;
+        let deliveryLocationName = null;
+        let deliveryDistance = null;
+
+        if (delivery_location_id) {
+            const [locRows] = await connection.execute(
+                'SELECT * FROM delivery_locations WHERE id = ?',
+                [Number(delivery_location_id)]
+            );
+            if (locRows.length === 0) {
+                throw new Error('The selected delivery location was not found in settings');
+            }
+            const loc = locRows[0];
+            deliveryFee = Number(loc.transport_fee) || 0;
+            deliveryLocationName = loc.location_name;
+            deliveryDistance = loc.distance_km != null ? Number(loc.distance_km) : null;
+        }
 
         const shift = await getOpenShift(req.user.id, connection);
 
@@ -137,6 +181,10 @@ exports.createOrder = async (req, res) => {
             }
         }
 
+        if (deliveryFee > 0) {
+            finalTotalAmount = Math.round((finalTotalAmount + deliveryFee) * 100) / 100;
+        }
+
         let nameToSave = customer_name || (platform ? `${platform} Order` : 'Guest');
         if (nameToSave && nameToSave.length > 255) {
             nameToSave = nameToSave.substring(0, 252) + '...';
@@ -156,11 +204,12 @@ exports.createOrder = async (req, res) => {
 
         const [orderResult] = await connection.execute(
             `INSERT INTO orders (cashier_id, shift_id, total_amount, status, payment_status, customer_name, platform, platform_order_id, scheduled_for, scheduled_released,
-                original_total_amount, discount_type, discount_value, discount_amount, discount_reason, discount_given_by, discount_given_at, discount_source, discount_rule_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                original_total_amount, discount_type, discount_value, discount_amount, discount_reason, discount_given_by, discount_given_at, discount_source, discount_rule_id,
+                delivery_location_id, delivery_location_name, delivery_distance, delivery_fee, delivery_address)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 req.user.id, shift?.id || null, finalTotalAmount, 'pending', 'pending', nameToSave, platform || null, platform_order_id || null, scheduledForDate, scheduledReleased,
-                appliedDiscount ? totalAmount : null,
+                appliedDiscount ? Math.round((totalAmount + deliveryFee) * 100) / 100 : null,
                 appliedDiscount ? (['percentage', 'fixed'].includes(appliedDiscount.type) ? appliedDiscount.type : 'fixed') : 'none',
                 appliedDiscount ? appliedDiscount.value : 0,
                 appliedDiscount ? appliedDiscount.amount : 0,
@@ -168,7 +217,12 @@ exports.createOrder = async (req, res) => {
                 appliedDiscount ? (appliedDiscount.givenBy || null) : null,
                 appliedDiscount ? new Date() : null,
                 appliedDiscount ? appliedDiscount.source : null,
-                appliedDiscount ? (appliedDiscount.ruleId || null) : null
+                appliedDiscount ? (appliedDiscount.ruleId || null) : null,
+                delivery_location_id ? Number(delivery_location_id) : null,
+                deliveryLocationName || null,
+                deliveryDistance != null ? deliveryDistance : null,
+                deliveryFee,
+                delivery_address ? String(delivery_address).trim() : null
             ]
         );
         const orderId = orderResult.insertId;
@@ -330,7 +384,7 @@ exports.createOrder = async (req, res) => {
         await connection.commit();
         
         // Emit Real-time Events
-        const io = req.app.get('io');
+        const io = req.app && typeof req.app.get === 'function' ? req.app.get('io') : null;
         if (io) {
             io.emit('order_update', { type: 'new', orderId });
             io.emit('stock_update', { items: [...stockItemIds] });
@@ -349,6 +403,10 @@ exports.createOrder = async (req, res) => {
                     customer_name: nameToSave,
                     items: formattedItems,
                     total: finalTotalAmount,
+                    delivery_fee: deliveryFee,
+                    delivery_location_name: deliveryLocationName,
+                    delivery_distance: deliveryDistance,
+                    delivery_address: delivery_address || null,
                     status: 'pending'
                 });
             }
@@ -358,7 +416,10 @@ exports.createOrder = async (req, res) => {
             success: true,
             orderId,
             total_amount: finalTotalAmount,
-            original_total_amount: appliedDiscount ? totalAmount : null,
+            delivery_fee: deliveryFee,
+            delivery_location_name: deliveryLocationName,
+            delivery_distance: deliveryDistance,
+            original_total_amount: appliedDiscount ? (totalAmount + deliveryFee) : null,
             discount_amount: appliedDiscount ? appliedDiscount.amount : 0,
             message: appliedDiscount
                 ? `Order created successfully with discount (KES ${appliedDiscount.amount} off).`
@@ -366,7 +427,10 @@ exports.createOrder = async (req, res) => {
             data: {
                 orderId,
                 total_amount: finalTotalAmount,
-                original_total_amount: appliedDiscount ? totalAmount : null,
+                delivery_fee: deliveryFee,
+                delivery_location_name: deliveryLocationName,
+                delivery_distance: deliveryDistance,
+                original_total_amount: appliedDiscount ? (totalAmount + deliveryFee) : null,
                 discount_amount: appliedDiscount ? appliedDiscount.amount : 0,
                 discount_type: appliedDiscount ? appliedDiscount.type : 'none',
                 discount_value: appliedDiscount ? appliedDiscount.value : 0,

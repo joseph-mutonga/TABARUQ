@@ -120,6 +120,37 @@
                 </form>
             </div>
 
+            <!-- Tabaruq Delivery Distance & Transport Fee Settings Card -->
+            <div class="glass-card" style="margin-top:2rem;" id="deliveryLocationsCard">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <h3 style="color:#ffffff; font-weight:800; margin:0;"><i class="fas fa-truck-fast"></i> Tabaruq Delivery — Distance Transport Fees</h3>
+                        <p class="card-small" style="color:var(--text-gray); margin-top:0.3rem;">
+                            Set transport delivery fees based on destination and distance (in km). When staff record a Tabaruq delivery sale in the POS or Delivery Module, they must choose the destination to automatically add this transport fee to the food cost.
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openDeliveryLocationModal()" style="white-space:nowrap;"><i class="fas fa-plus"></i> Add Delivery Location</button>
+                </div>
+
+                <div class="table-container" style="margin-top:1rem;">
+                    <table id="deliveryLocationsTable">
+                        <thead>
+                            <tr>
+                                <th>Destination / Location</th>
+                                <th>Distance (KM)</th>
+                                <th>Transport Fee (KES)</th>
+                                <th>Notes / Coverage</th>
+                                <th style="text-align:center;">Status</th>
+                                <th style="text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deliveryLocationsBody">
+                            <tr><td colspan="6" style="text-align:center; color:var(--text-gray); padding:2rem;">Loading delivery locations...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- ════════════════════════════════════════════════════════════ -->
             <!-- STOCK DEDUCTION RULES                                        -->
             <!-- ════════════════════════════════════════════════════════════ -->
@@ -246,6 +277,47 @@
                 <button onclick="closeRecipeModal()" class="btn" style="background:rgba(255,255,255,0.07); color:#fff; padding:0.6rem 1.4rem;">Cancel</button>
                 <button onclick="saveRecipe()" class="btn btn-primary" style="padding:0.6rem 1.4rem;"><i class="fas fa-save"></i> Save Recipe</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ════ DELIVERY LOCATION MODAL ════════════════════════════════════════ -->
+    <div id="deliveryLocationModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.82); z-index:2000; justify-content:center; align-items:center; padding:1rem;">
+        <div style="background:var(--card-bg,#1e1e2e); border-radius:1rem; padding:2rem; width:520px; max-width:92vw; max-height:85vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                <h3 style="color:#fff; font-weight:800; margin:0;" id="deliveryLocationModalTitle"><i class="fas fa-location-dot"></i> Add Delivery Location</h3>
+                <button type="button" onclick="closeDeliveryLocationModal()" style="background:transparent; border:none; color:rgba(255,255,255,0.6); font-size:1.3rem; cursor:pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="deliveryLocationForm">
+                <input type="hidden" id="deliveryLocId">
+                <div class="form-group">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Destination / Location Name <span style="color:var(--accent-danger);">*</span></label>
+                    <input type="text" id="deliveryLocName" class="form-control" required placeholder="e.g. Eastleigh Section 1, CBD, Kilimani" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Distance (KM) <span style="color:var(--accent-danger);">*</span></label>
+                        <input type="number" id="deliveryLocDistance" class="form-control" min="0" step="0.1" required placeholder="e.g. 3.5" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                    </div>
+                    <div class="form-group">
+                        <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Transport Fee (KES) <span style="color:var(--accent-danger);">*</span></label>
+                        <input type="number" id="deliveryLocFee" class="form-control" min="0" step="1" required placeholder="e.g. 150" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="color:var(--text-gray); font-size:0.9rem; font-weight:500;">Notes / Coverage Area (Optional)</label>
+                    <input type="text" id="deliveryLocNotes" class="form-control" placeholder="e.g. Within 3km radius, motorbike rider" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff;">
+                </div>
+                <div class="form-group" style="margin-top:0.75rem;">
+                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; color:#fff; font-size:0.9rem;">
+                        <input type="checkbox" id="deliveryLocActive" checked style="width:18px; height:18px; cursor:pointer;">
+                        <span>Active (Available to select during sales / orders)</span>
+                    </label>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.5rem;">
+                    <button type="button" onclick="closeDeliveryLocationModal()" class="btn" style="background:rgba(255,255,255,0.07); color:#fff; padding:0.6rem 1.4rem;">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="padding:0.6rem 1.4rem;"><i class="fas fa-save"></i> Save Location</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -652,12 +724,162 @@
             setTimeout(() => toast.remove(), 3500);
         }
 
+        // ─── Tabaruq Delivery Distance & Transport Fees ───────────────────────
+        let allDeliveryLocations = [];
+
+        async function loadDeliveryLocations() {
+            try {
+                const res = await apiFetch('/settings/delivery-locations?all=1');
+                allDeliveryLocations = res.data || [];
+                renderDeliveryLocations(allDeliveryLocations);
+            } catch (err) {
+                console.error('loadDeliveryLocations error:', err);
+                const tbody = document.getElementById('deliveryLocationsBody');
+                if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent-danger); padding:1.5rem;">Could not load delivery locations: ${err.message}</td></tr>`;
+            }
+        }
+
+        function renderDeliveryLocations(locations) {
+            const tbody = document.getElementById('deliveryLocationsBody');
+            if (!tbody) return;
+            if (!locations || locations.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-gray); padding:2rem;">No delivery locations configured yet. Click "Add Delivery Location" above to add one.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = locations.map(loc => {
+                const isActive = Number(loc.is_active) === 1;
+                const statusBadge = isActive
+                    ? `<span class="badge" style="background:var(--accent-success); cursor:pointer;" onclick="toggleDeliveryLocationActive(${loc.id}, 1)" title="Click to disable"><i class="fas fa-check"></i> Active</span>`
+                    : `<span class="badge" style="background:#64748b; cursor:pointer;" onclick="toggleDeliveryLocationActive(${loc.id}, 0)" title="Click to enable"><i class="fas fa-ban"></i> Inactive</span>`;
+
+                return `
+                    <tr style="${isActive ? '' : 'opacity: 0.6;'}">
+                        <td><strong>${escapeHtml(loc.location_name)}</strong></td>
+                        <td>${Number(loc.distance_km).toFixed(1)} km</td>
+                        <td style="color:#4ade80; font-weight:700;">KES ${Number(loc.transport_fee).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td style="color:var(--text-gray); font-size:0.85rem;">${escapeHtml(loc.notes || '—')}</td>
+                        <td style="text-align:center;">${statusBadge}</td>
+                        <td style="text-align:center; white-space:nowrap;">
+                            <button type="button" class="btn" style="padding:0.4rem 0.65rem; background:var(--primary); margin-right:0.35rem;" onclick="editDeliveryLocation(${loc.id})" title="Edit Location"><i class="fas fa-edit"></i></button>
+                            <button type="button" class="btn" style="padding:0.4rem 0.65rem; background:var(--accent-danger);" onclick="deleteDeliveryLocation(${loc.id}, '${escapeHtml(loc.location_name)}')" title="Delete Location"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function openDeliveryLocationModal(loc = null) {
+            const modal = document.getElementById('deliveryLocationModal');
+            const title = document.getElementById('deliveryLocationModalTitle');
+            const form = document.getElementById('deliveryLocationForm');
+            form.reset();
+
+            if (loc) {
+                title.innerHTML = '<i class="fas fa-pen-to-square"></i> Edit Delivery Location';
+                document.getElementById('deliveryLocId').value = loc.id;
+                document.getElementById('deliveryLocName').value = loc.location_name || '';
+                document.getElementById('deliveryLocDistance').value = loc.distance_km != null ? loc.distance_km : 0;
+                document.getElementById('deliveryLocFee').value = loc.transport_fee != null ? loc.transport_fee : 0;
+                document.getElementById('deliveryLocNotes').value = loc.notes || '';
+                document.getElementById('deliveryLocActive').checked = Number(loc.is_active) === 1;
+            } else {
+                title.innerHTML = '<i class="fas fa-location-dot"></i> Add Delivery Location';
+                document.getElementById('deliveryLocId').value = '';
+                document.getElementById('deliveryLocActive').checked = true;
+            }
+            modal.style.display = 'flex';
+        }
+
+        function closeDeliveryLocationModal() {
+            document.getElementById('deliveryLocationModal').style.display = 'none';
+        }
+
+        function editDeliveryLocation(id) {
+            const loc = allDeliveryLocations.find(l => l.id === id);
+            if (loc) openDeliveryLocationModal(loc);
+        }
+
+        async function toggleDeliveryLocationActive(id, currentActive) {
+            const loc = allDeliveryLocations.find(l => l.id === id);
+            if (!loc) return;
+            try {
+                await apiFetch(`/settings/delivery-locations/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        location_name: loc.location_name,
+                        distance_km: loc.distance_km,
+                        transport_fee: loc.transport_fee,
+                        notes: loc.notes,
+                        is_active: currentActive ? 0 : 1
+                    })
+                });
+                showToast(`Location ${currentActive ? 'deactivated' : 'activated'}!`, 'success');
+                await loadDeliveryLocations();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        document.getElementById('deliveryLocationForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('deliveryLocId').value;
+            const payload = {
+                location_name: document.getElementById('deliveryLocName').value.trim(),
+                distance_km: parseFloat(document.getElementById('deliveryLocDistance').value),
+                transport_fee: parseFloat(document.getElementById('deliveryLocFee').value),
+                notes: document.getElementById('deliveryLocNotes').value.trim(),
+                is_active: document.getElementById('deliveryLocActive').checked ? 1 : 0
+            };
+
+            if (!payload.location_name) {
+                showToast('Please enter a location name', 'error');
+                return;
+            }
+
+            try {
+                if (id) {
+                    await apiFetch(`/settings/delivery-locations/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(payload)
+                    });
+                    showToast('Delivery location updated!', 'success');
+                } else {
+                    await apiFetch('/settings/delivery-locations', {
+                        method: 'POST',
+                        body: JSON.stringify(payload)
+                    });
+                    showToast('Delivery location added!', 'success');
+                }
+                closeDeliveryLocationModal();
+                await loadDeliveryLocations();
+            } catch (err) { showToast(err.message, 'error'); }
+        };
+
+        async function deleteDeliveryLocation(id, name) {
+            if (!confirm(`Are you sure you want to delete delivery location "${name}"?`)) return;
+            try {
+                await apiFetch(`/settings/delivery-locations/${id}`, { method: 'DELETE' });
+                showToast('Delivery location deleted', 'success');
+                await loadDeliveryLocations();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         // ─── Init ─────────────────────────────────────────────────────────────
         async function init() {
             await Promise.all([
                 loadCommissionSettings(),
                 loadReceiptSettings(),
-                loadAllItems()
+                loadAllItems(),
+                loadDeliveryLocations()
             ]);
             await Promise.all([loadDeductionRules(), loadRecipes()]);
             checkPendingPayments();

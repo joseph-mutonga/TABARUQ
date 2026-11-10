@@ -22,4 +22,10 @@ router.get('/recipes', verifyToken, settingsController.getRecipes);
 router.post('/recipes', verifyToken, isAdmin, settingsController.saveRecipe);
 router.delete('/recipes/:combo_item_id', verifyToken, isAdmin, settingsController.deleteRecipe);
 
+// ── Tabaruq Delivery Distance & Transport Fees ────────────────────────────────
+router.get('/delivery-locations', verifyToken, settingsController.getDeliveryLocations); // Cashier & admin
+router.post('/delivery-locations', verifyToken, isAdmin, settingsController.saveDeliveryLocation); // Only admin
+router.put('/delivery-locations/:id', verifyToken, isAdmin, settingsController.updateDeliveryLocation); // Only admin
+router.delete('/delivery-locations/:id', verifyToken, isAdmin, settingsController.deleteDeliveryLocation); // Only admin
+
 module.exports = router;

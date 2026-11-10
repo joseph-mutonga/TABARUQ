@@ -3,6 +3,22 @@ const db = require('../config/db');
 exports.getItems = async (req, res) => {
     try {
         const [rows] = await db.execute('SELECT * FROM inventory');
+        
+        // If the user is a cashier, mask raw ingredient stock levels
+        // Cashiers can only record stock intake, but are hidden from seeing stock quantities or balances
+        if (req.user && req.user.role === 'cashier') {
+            const sanitized = rows.map(item => {
+                if (item.item_type === 'ingredient') {
+                    const copy = { ...item };
+                    delete copy.quantity;
+                    delete copy.low_stock_threshold;
+                    return copy;
+                }
+                return item;
+            });
+            return res.json({ success: true, data: sanitized });
+        }
+        
         res.json({ success: true, data: rows });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -255,6 +271,187 @@ exports.deleteItem = async (req, res) => {
         res.json({ success: true, message: 'Item deleted' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+exports.recordStockIntake = async (req, res) => {
+    const {
+        item_id,
+        item_name,
+        name,
+        category,
+        quantity,
+        unit,
+        cost_price,
+        total_cost,
+        supplier,
+        notes,
+        record_expense,
+        create_expense,
+        low_stock_threshold
+    } = req.body;
+    const qtyNum = parseFloat(quantity);
+
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid quantity greater than zero' });
+    }
+
+    const shouldRecordExpense = record_expense !== undefined 
+        ? !!record_expense 
+        : (create_expense !== undefined ? !!create_expense : true);
+
+    let resolvedCostInput = parseFloat(cost_price);
+    if ((isNaN(resolvedCostInput) || resolvedCostInput <= 0) && total_cost != null) {
+        const tot = parseFloat(total_cost);
+        if (!isNaN(tot) && tot > 0) {
+            resolvedCostInput = tot / qtyNum;
+        }
+    }
+
+    let conn;
+    try {
+        conn = await db.getConnection();
+        await conn.beginTransaction();
+
+        let targetId = (item_id && item_id !== '__NEW__' && item_id !== '__new__') ? Number(item_id) : null;
+        let resolvedItem = null;
+
+        // If targetId was given, look it up
+        if (targetId) {
+            const [rows] = await conn.execute('SELECT * FROM inventory WHERE id = ? FOR UPDATE', [targetId]);
+            if (rows.length === 0) {
+                await conn.rollback();
+                return res.status(404).json({ success: false, message: 'Selected stock item not found' });
+            }
+            resolvedItem = rows[0];
+        } else {
+            // New item name was given
+            const cleanName = (item_name || name || '').trim();
+            if (!cleanName) {
+                await conn.rollback();
+                return res.status(400).json({ success: false, message: 'Please select an existing item or enter a new stock item name' });
+            }
+
+            // Check if item with this name already exists (case-insensitive)
+            const [existing] = await conn.execute('SELECT * FROM inventory WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) FOR UPDATE', [cleanName]);
+            if (existing.length > 0) {
+                resolvedItem = existing[0];
+                targetId = resolvedItem.id;
+            } else {
+                // Create brand new ingredient
+                const resolvedUnit = (unit || 'kg').trim();
+                const resolvedCost = !isNaN(resolvedCostInput) && resolvedCostInput >= 0 ? resolvedCostInput : 0;
+                const resolvedCategory = (category || 'Other').trim();
+                const threshold = parseFloat(low_stock_threshold) || 5.00;
+
+                const [insertResult] = await conn.execute(
+                    `INSERT INTO inventory (name, category, cost_price, selling_price, unit, quantity, item_type, low_stock_threshold, supplier)
+                     VALUES (?, ?, ?, 0.00, ?, ?, 'ingredient', ?, ?)`,
+                    [cleanName, resolvedCategory, resolvedCost, resolvedUnit, qtyNum, threshold, supplier ? supplier.trim() : null]
+                );
+                targetId = insertResult.insertId;
+                resolvedItem = {
+                    id: targetId,
+                    name: cleanName,
+                    unit: resolvedUnit,
+                    cost_price: resolvedCost,
+                    quantity: qtyNum,
+                    category: resolvedCategory
+                };
+
+                // Initial stock log
+                const intakeReason = `Stock Intake (New): Received ${qtyNum} ${resolvedUnit}${supplier ? ' from ' + supplier.trim() : ''}${notes ? ' - ' + notes.trim() : ''}`;
+                await conn.execute(
+                    'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
+                    [targetId, req.user.id, qtyNum, intakeReason]
+                );
+
+                // Expense if cost > 0
+                if (shouldRecordExpense && resolvedCost > 0) {
+                    const calculatedTotalCost = total_cost != null && Number(total_cost) > 0 ? Number(total_cost) : (qtyNum * resolvedCost);
+                    await conn.execute(
+                        'INSERT INTO expenses (description, category, amount, expense_date, created_by) VALUES (?, ?, ?, CURRENT_DATE(), ?)',
+                        [`Stock Intake - ${cleanName} (${qtyNum} ${resolvedUnit})${supplier ? ' [' + supplier.trim() + ']' : ''}`, 'Stock', calculatedTotalCost, req.user.id]
+                    );
+                }
+
+                await conn.commit();
+
+                const io = req.app && typeof req.app.get === 'function' ? req.app.get('io') : null;
+                if (io) {
+                    io.emit('stock_update', { items: [targetId] });
+                    if (shouldRecordExpense && resolvedCost > 0) io.emit('expense_update');
+                }
+
+                return res.status(201).json({
+                    success: true,
+                    message: `New stock intake of ${cleanName} (${qtyNum} ${resolvedUnit}) recorded successfully`,
+                    data: {
+                        id: targetId,
+                        itemId: targetId,
+                        name: cleanName,
+                        quantity_added: qtyNum,
+                        new_total: qtyNum,
+                        unit: resolvedUnit
+                    }
+                });
+            }
+        }
+
+        // If updating an existing item (either selected by ID or existing name matched)
+        const currentQty = Number(resolvedItem.quantity) || 0;
+        const newTotal = currentQty + qtyNum;
+        const resolvedUnit = (unit || resolvedItem.unit || 'kg').trim();
+        const resolvedCost = !isNaN(resolvedCostInput) && resolvedCostInput >= 0 ? resolvedCostInput : (Number(resolvedItem.cost_price) || 0);
+
+        // Update inventory quantity (and cost_price / unit if provided)
+        await conn.execute(
+            `UPDATE inventory SET quantity = quantity + ?, cost_price = ?, unit = ?${supplier ? ', supplier = ?' : ''} WHERE id = ?`,
+            supplier ? [qtyNum, resolvedCost, resolvedUnit, supplier.trim(), targetId] : [qtyNum, resolvedCost, resolvedUnit, targetId]
+        );
+
+        // Audit log in stock_logs
+        const intakeReason = `Stock Intake: Received ${qtyNum} ${resolvedUnit}${supplier ? ' from ' + supplier.trim() : ''}${notes ? ' - ' + notes.trim() : ''}`;
+        await conn.execute(
+            'INSERT INTO stock_logs (item_id, user_id, change_amount, reason) VALUES (?, ?, ?, ?)',
+            [targetId, req.user.id, qtyNum, intakeReason]
+        );
+
+        // Expense record
+        if (shouldRecordExpense && resolvedCost > 0) {
+            const calculatedTotalCost = total_cost != null && Number(total_cost) > 0 ? Number(total_cost) : (qtyNum * resolvedCost);
+            await conn.execute(
+                'INSERT INTO expenses (description, category, amount, expense_date, created_by) VALUES (?, ?, ?, CURRENT_DATE(), ?)',
+                [`Stock Intake - ${resolvedItem.name} (${qtyNum} ${resolvedUnit})${supplier ? ' [' + supplier.trim() + ']' : ''}`, 'Stock', calculatedTotalCost, req.user.id]
+            );
+        }
+
+        await conn.commit();
+
+        const io = req.app && typeof req.app.get === 'function' ? req.app.get('io') : null;
+        if (io) {
+            io.emit('stock_update', { items: [targetId] });
+            if (shouldRecordExpense && resolvedCost > 0) io.emit('expense_update');
+        }
+
+        res.json({
+            success: true,
+            message: `Stock intake of ${resolvedItem.name} (${qtyNum} ${resolvedUnit}) recorded successfully. New stock: ${newTotal} ${resolvedUnit}.`,
+            data: {
+                id: targetId,
+                itemId: targetId,
+                name: resolvedItem.name,
+                quantity_added: qtyNum,
+                new_total: newTotal,
+                unit: resolvedUnit
+            }
+        });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        console.error('recordStockIntake error:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    } finally {
+        if (conn) conn.release();
     }
 };
 

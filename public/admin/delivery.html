@@ -288,6 +288,21 @@
                 </div>
             </div>
 
+            <!-- Tabaruq Delivery Destination & Distance Fee -->
+            <div id="mDeliveryLocationRow" style="display:none; margin-bottom:1rem; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:0.85rem;">
+                <div class="form-group" style="margin-bottom:0.5rem;">
+                    <label style="color:#fff; font-weight:700;">Delivery Destination (Distance Fee) <span style="color: var(--accent-danger);">*</span></label>
+                    <select id="mDeliveryLocation" class="form-control" onchange="renderManualCart()" style="background:rgba(0,0,0,0.3); color:#fff; border:1px solid rgba(255,255,255,0.2);">
+                        <option value="">-- Choose Delivery Location / Distance --</option>
+                    </select>
+                    <small id="mDeliveryFeeHint" style="display:none; margin-top:0.35rem; color:#4ade80; font-weight:600;"></small>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="color:rgba(255,255,255,0.8); font-size:0.82rem;">Delivery Street Address / Customer Notes (Optional)</label>
+                    <input type="text" id="mDeliveryAddress" class="form-control" placeholder="e.g. Street, House / Flat number, Landmark">
+                </div>
+            </div>
+
             <div class="manual-order-grid" style="display:grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap:1rem; min-height:0; margin-top:0.25rem;">
                 <!-- Item Selector -->
                 <div style="display:flex; flex-direction:column;">
@@ -630,6 +645,12 @@
                         <div style="border-top:1px dashed #000; padding-top:5px; margin-top:5px; font-size:13px;">
                             <div class="meta-item"><span>Subtotal:</span> <span>${formatCurrency(subtotal)}</span></div>
                             <div class="meta-item" style="font-weight:bold;"><span>${discountLabel}:</span> <span>-${formatCurrency(order.discount_amount)}</span></div>
+                        </div>` : ''}
+                        ${Number(order.delivery_fee) > 0 ? `
+                        <div style="border-top:1px dashed #000; padding-top:5px; margin-top:5px; font-size:13px;">
+                            <div class="meta-item"><span>Delivery Destination:</span> <strong>${order.delivery_location_name || 'Tabaruq Delivery'} (${Number(order.delivery_distance || 0).toFixed(1)} km)</strong></div>
+                            ${order.delivery_address ? `<div class="meta-item"><span>Delivery Address:</span> <span>${order.delivery_address}</span></div>` : ''}
+                            <div class="meta-item" style="font-weight:bold;"><span>Transport Fee:</span> <span>+${formatCurrency(order.delivery_fee)}</span></div>
                         </div>` : ''}
                         <div class="total">Total: ${formatCurrency(order.total_amount)}</div>
                         ${(paybillNum || tillNum) ? `
@@ -1042,12 +1063,41 @@
 
         let __inventory = [];
         let __mCart = [];
+        let __deliveryLocations = [];
+
+        async function loadManualDeliveryLocations() {
+            try {
+                const res = await apiFetch('/settings/delivery-locations');
+                __deliveryLocations = (res.data || []).filter(l => l.is_active == 1);
+                const select = document.getElementById('mDeliveryLocation');
+                if (select) {
+                    select.innerHTML = '<option value="">-- Choose Delivery Location / Distance --</option>' +
+                        __deliveryLocations.map(l => `
+                            <option value="${l.id}">
+                                ${l.location_name} (${l.distance_km || 0} km) — Transport Fee: KES ${Number(l.transport_fee).toLocaleString()}
+                            </option>
+                        `).join('');
+                }
+            } catch (err) {
+                console.error('Failed to load delivery locations:', err);
+            }
+        }
 
         async function openManualOrderModal() {
             document.getElementById('manualOrderModal').style.display = 'flex';
             const menuEl = document.getElementById('mMenuList');
             menuEl.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-gray);"><i class="fas fa-spinner fa-spin"></i> Loading delivery foods...</div>';
             try {
+                if (__deliveryLocations.length === 0) {
+                    await loadManualDeliveryLocations();
+                }
+                const locSelect = document.getElementById('mDeliveryLocation');
+                if (locSelect) locSelect.value = '';
+                const locAddr = document.getElementById('mDeliveryAddress');
+                if (locAddr) locAddr.value = '';
+                const feeHint = document.getElementById('mDeliveryFeeHint');
+                if (feeHint) feeHint.style.display = 'none';
+
                 const res = await apiFetch('/inventory');
                 __inventory = res.data.filter(i => i.is_delivery == 1);
                 __mCart = [];
@@ -1067,8 +1117,13 @@
             const query = document.getElementById('mItemSearch').value.toLowerCase();
             const platform = document.getElementById('mPlatform').value;
             const platformId = document.getElementById('mPlatformId');
-            platformId.required = platform !== 'Tabaruq Delivery';
-            platformId.placeholder = platform === 'Tabaruq Delivery' ? 'Optional reference (not required)' : 'e.g. #778899';
+            const isTabaruq = platform === 'Tabaruq Delivery';
+            platformId.required = !isTabaruq;
+            platformId.placeholder = isTabaruq ? 'Optional reference (not required)' : 'e.g. #778899';
+
+            const locRow = document.getElementById('mDeliveryLocationRow');
+            if (locRow) locRow.style.display = isTabaruq ? 'block' : 'none';
+
             const menuEl = document.getElementById('mMenuList');
             
             const filtered = __inventory.filter(i => {
@@ -1079,6 +1134,7 @@
             
             if (filtered.length === 0) {
                 menuEl.innerHTML = '<div style="padding:2rem 1rem; text-align:center; color:var(--text-gray);"><i class="fas fa-utensils" style="font-size:1.5rem; margin-bottom:0.6rem;"></i><br>No delivery foods found.<br><small>Use Add Delivery Food Item to create one.</small></div>';
+                renderManualCart();
                 return;
             }
 
@@ -1099,6 +1155,7 @@
                     </div>
                 `;
             }).join('');
+            renderManualCart();
         }
 
         function addToManualCart(id) {
@@ -1114,8 +1171,9 @@
 
         function renderManualCart() {
             const platform = document.getElementById('mPlatform').value;
+            const isTabaruq = platform === 'Tabaruq Delivery';
             const cartEl = document.getElementById('mCartList');
-            let total = 0;
+            let foodTotal = 0;
 
             cartEl.innerHTML = __mCart.map((item, index) => {
                 let price = Number(item.selling_price);
@@ -1124,7 +1182,7 @@
                 if (platform === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
                 if (platform === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
 
-                total += price * item.quantity;
+                foodTotal += price * item.quantity;
                 return `
                     <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; font-size:0.85rem;">
                         <div>
@@ -1136,7 +1194,29 @@
                 `;
             }).join('');
 
-            document.getElementById('mTotal').textContent = formatCurrency(total);
+            let deliveryFee = 0;
+            const locSelect = document.getElementById('mDeliveryLocation');
+            const hintEl = document.getElementById('mDeliveryFeeHint');
+            if (isTabaruq && locSelect && locSelect.value) {
+                const selectedLoc = __deliveryLocations.find(l => String(l.id) === String(locSelect.value));
+                if (selectedLoc) {
+                    deliveryFee = Number(selectedLoc.transport_fee || 0);
+                    if (hintEl) {
+                        hintEl.style.display = 'block';
+                        hintEl.textContent = `+ Transport Fee: ${formatCurrency(deliveryFee)} (${selectedLoc.distance_km || 0} km to ${selectedLoc.location_name})`;
+                    }
+                }
+            } else if (hintEl) {
+                hintEl.style.display = 'none';
+            }
+
+            const grandTotal = foodTotal + deliveryFee;
+            const totalEl = document.getElementById('mTotal');
+            if (deliveryFee > 0) {
+                totalEl.innerHTML = `<span>${formatCurrency(grandTotal)}</span> <span style="display:block; font-size:0.75rem; color:var(--text-gray); font-weight:normal;">(Food: ${formatCurrency(foodTotal)} + Transport: ${formatCurrency(deliveryFee)})</span>`;
+            } else {
+                totalEl.textContent = formatCurrency(grandTotal);
+            }
         }
 
         function removeFromManualCart(index) {
@@ -1147,12 +1227,18 @@
         async function saveManualOrder() {
             const platform_order_id = document.getElementById('mPlatformId').value.trim();
             const platform = document.getElementById('mPlatform').value;
-            if (platform !== 'Tabaruq Delivery' && !platform_order_id) {
+            const isTabaruq = platform === 'Tabaruq Delivery';
+            if (!isTabaruq && !platform_order_id) {
                 return alert('Platform Order ID is required');
             }
             if (__mCart.length === 0) return alert('Select items first');
+
+            const locSelect = document.getElementById('mDeliveryLocation');
+            if (isTabaruq && (!locSelect || !locSelect.value)) {
+                return alert('Please select a delivery destination / distance for Tabaruq Delivery.');
+            }
             
-            const total = __mCart.reduce((acc, item) => {
+            const foodTotal = __mCart.reduce((acc, item) => {
                 let price = Number(item.selling_price);
                 if (platform === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platform === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
@@ -1166,10 +1252,12 @@
                     method: 'POST',
                     body: JSON.stringify({
                         items: __mCart,
-                        total_amount: total,
+                        total_amount: foodTotal,
                         platform: platform,
                         platform_order_id: platform_order_id,
-                        customer_name: `${platform} Order`
+                        customer_name: `${platform} Order`,
+                        delivery_location_id: isTabaruq && locSelect ? locSelect.value : null,
+                        delivery_address: isTabaruq ? (document.getElementById('mDeliveryAddress')?.value.trim() || null) : null
                     })
                 });
                 alert('Order recorded successfully!');

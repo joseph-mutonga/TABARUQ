@@ -17,6 +17,7 @@
                 <li id="ordersNavLink" style="display:none;"><a href="orders.html"><i class="fas fa-history"></i> Orders & Payments <span id="pendingBadge" class="notification-badge">0</span></a></li>
                 <li id="scheduledNavLink" style="display:none;"><a href="scheduled.html"><i class="fas fa-calendar-alt"></i> Scheduled Orders <span id="scheduledBadge" class="notification-badge">0</span></a></li>
                 <li id="deliveryNavLink" style="display:none;"><a href="../admin/delivery.html"><i class="fas fa-truck"></i> Delivery Module</a></li>
+                <li id="stocksNavLink" style="display:none;"><a href="../admin/stocks.html"><i class="fas fa-warehouse"></i> Stocks &amp; Ingredients</a></li>
                 <li id="adminNavLink" style="display:none;"><a href="../admin/index.html"><i class="fas fa-user-shield"></i> Admin Panel</a></li>
                 <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
@@ -40,6 +41,7 @@
                     <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                         <button class="btn" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; font-weight: 700;" onclick="openExpenseModal()"><i class="fas fa-wallet" style="margin-right: 0.35rem;"></i> Record Expense</button>
                         <button class="btn btn-primary" onclick="openProductionModal()"><i class="fas fa-boxes" style="margin-right: 0.35rem;"></i> Record Production</button>
+                        <button class="btn" style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700;" onclick="openStockIntakeModal()"><i class="fas fa-dolly" style="margin-right: 0.35rem;"></i> Record Stock Intake</button>
                     </div>
                 </div>
             </div>
@@ -86,6 +88,26 @@
             <div class="form-group">
                 <label>Customer Name</label>
                 <input type="text" id="custName" class="form-control" placeholder="E.g., John Doe" style="margin-bottom: 1rem;">
+            </div>
+            <!-- Tabaruq Delivery Selection -->
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: #fff; font-weight: 700;">
+                    <input type="checkbox" id="isDeliveryCheckbox" onchange="toggleDeliveryFields()" style="width: 18px; height: 18px; cursor: pointer;">
+                    <span><i class="fas fa-motorcycle" style="color: var(--accent-cyan);"></i> Tabaruq Delivery Order</span>
+                </label>
+                <div id="tabaruqDeliveryFields" style="display: none; margin-top: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 0.85rem;">
+                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                        <label style="color: #fff; font-size: 0.88rem; font-weight: 700;">Delivery Destination (Distance Fee) <span style="color: var(--accent-danger);">*</span></label>
+                        <select id="checkoutDeliveryLocation" class="form-control" onchange="onDeliveryLocationChange()" style="background: rgba(0,0,0,0.3); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+                            <option value="">-- Choose Delivery Location / Distance --</option>
+                        </select>
+                        <div id="deliveryFeeHint" style="display: none; margin-top: 0.35rem; color: #4ade80; font-size: 0.82rem; font-weight: 600;"></div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="color: rgba(255,255,255,0.85); font-size: 0.82rem;">Delivery Street Address / Customer Notes (Optional)</label>
+                        <input type="text" id="checkoutDeliveryAddress" class="form-control" placeholder="e.g. House No, Flat, Street, Landmark">
+                    </div>
+                </div>
             </div>
             <div class="form-group" style="margin-bottom: 1.5rem;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: #fff;">
@@ -145,6 +167,10 @@
                 <div id="checkoutDiscountRow" style="display: none; justify-content: space-between; color: #4ade80; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.35rem;">
                     <span id="checkoutDiscountAmountLabel"><i class="fas fa-tag"></i> Active Discount:</span>
                     <span id="checkoutDiscountAmountDisplay">-KES 0.00</span>
+                </div>
+                <div id="checkoutDeliveryFeeRow" style="display: none; justify-content: space-between; color: #38bdf8; font-size: 0.9rem; font-weight: 600; margin-bottom: 0.35rem;">
+                    <span id="checkoutDeliveryFeeLabel"><i class="fas fa-truck-moving"></i> Transport Fee:</span>
+                    <span id="checkoutDeliveryFeeDisplay">+KES 0.00</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: baseline; color: #fff; font-weight: 800; font-size: 1.05rem; border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 0.45rem; margin-top: 0.35rem;">
                     <span>Amount to Pay:</span>
@@ -222,6 +248,7 @@
                 </div>
 
                 <div class="total-section-premium">
+                    <div id="postModalDelivery" style="display:none; background:#0284c7; color:white; font-size:0.85rem; font-weight:700; padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.75rem;"></div>
                     <div id="postModalDiscount" style="display:none; background:#16a34a; color:white; font-size:0.85rem; font-weight:700; padding:0.5rem 0.75rem; border-radius:8px; margin-bottom:0.75rem;"></div>
                     <div class="total-label-premium">Grand Total</div>
                     <div id="postModalTotal" class="total-amount-premium">KES 0.00</div>
@@ -335,6 +362,86 @@
                 <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
                     <button type="button" class="btn" style="background: #64748b; color: white;" onclick="closeExpenseModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="posSaveExpenseBtn"><i class="fas fa-save" style="margin-right: 0.35rem;"></i> Save Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Record Stock Intake Modal (Cashier POS) -->
+    <div id="stockIntakeModal" style="display:none; position: fixed; inset:0; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index: 2500; padding: 1rem;">
+        <div class="glass-card" style="width: 480px; max-width: 94vw; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                <div>
+                    <h3 style="margin: 0; color: #ffffff; font-weight: 800;"><i class="fas fa-dolly" style="margin-right: 0.5rem; color: #10b981;"></i> Record Stock Intake</h3>
+                    <p style="margin: 0.25rem 0 0; color: rgba(255,255,255,0.7); font-size: 0.82rem;">Record meat, maize, cooking oil, or any incoming hotel supplies.</p>
+                </div>
+                <button type="button" style="background: none; border: none; color: #fff; font-size: 1.25rem; cursor: pointer;" onclick="closeStockIntakeModal()">&times;</button>
+            </div>
+            <form id="stockIntakeForm">
+                <div class="form-group">
+                    <label style="color: #fff; font-weight: 600;">Stock Item / Ingredient <span style="color: var(--accent-danger);">*</span></label>
+                    <select id="stockIntakeItemSelect" class="form-control" onchange="onStockIntakeItemChange()" required style="background: rgba(0,0,0,0.3); color: #fff;">
+                        <option value="">-- Choose Stock Item --</option>
+                        <option value="__new__">+ Add New Stock Item (e.g. Meat, Maize)</option>
+                    </select>
+                </div>
+
+                <div id="newStockItemFields" style="display: none; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem;">
+                    <div class="form-group" style="margin-bottom: 0.65rem;">
+                        <label style="color: #fff; font-size: 0.85rem;">New Item Name <span style="color: var(--accent-danger);">*</span></label>
+                        <input type="text" id="newStockItemName" class="form-control" placeholder="e.g. Fresh Goat Meat, Maize Bags">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="color: #fff; font-size: 0.85rem;">Category</label>
+                        <select id="newStockItemCategory" class="form-control">
+                            <option value="Meat & Poultry">Meat &amp; Poultry</option>
+                            <option value="Grains & Cereals">Grains &amp; Cereals</option>
+                            <option value="Vegetables">Vegetables</option>
+                            <option value="Dairy">Dairy</option>
+                            <option value="Oils & Fats">Oils &amp; Fats</option>
+                            <option value="Spices & Herbs">Spices &amp; Herbs</option>
+                            <option value="Other">Other Supplies</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 0.75rem;">
+                    <div class="form-group">
+                        <label style="color: #fff; font-weight: 600;">Quantity Received <span style="color: var(--accent-danger);">*</span></label>
+                        <input type="number" id="stockIntakeQty" class="form-control" min="0.01" step="0.01" required placeholder="e.g. 25">
+                    </div>
+                    <div class="form-group">
+                        <label style="color: #fff; font-weight: 600;">Unit of Measure</label>
+                        <input type="text" id="stockIntakeUnit" class="form-control" placeholder="e.g. kg, bags, litres" value="kg">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group">
+                        <label style="color: #fff; font-size: 0.85rem;">Cost per Unit (KES)</label>
+                        <input type="number" id="stockIntakeCost" class="form-control" min="0" step="0.01" placeholder="e.g. 450">
+                    </div>
+                    <div class="form-group">
+                        <label style="color: #fff; font-size: 0.85rem;">Supplier / Delivered By</label>
+                        <input type="text" id="stockIntakeSupplier" class="form-control" placeholder="e.g. Kariuki Butchery">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="color: #fff; font-size: 0.85rem;">Delivery Notes / Invoice No. (Optional)</label>
+                    <input type="text" id="stockIntakeNotes" class="form-control" placeholder="e.g. Delivered 9:00 AM, Inv #402">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: rgba(255,255,255,0.9); font-size: 0.85rem;">
+                        <input type="checkbox" id="stockIntakeExpenseCheck" checked style="width: 16px; height: 16px; cursor: pointer;">
+                        <span>Record as business Stock Expense in accounts</span>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button type="button" class="btn" style="background: #64748b; color: white;" onclick="closeStockIntakeModal()">Cancel</button>
+                    <button type="submit" class="btn" id="saveStockIntakeBtn" style="background: #10b981; color: white; font-weight: 700;"><i class="fas fa-check-circle"></i> Record Stock Intake</button>
                 </div>
             </form>
         </div>
@@ -519,9 +626,86 @@
             }
         }
 
+        let cashierDeliveryLocations = [];
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        async function loadCashierDeliveryLocations() {
+            try {
+                const res = await apiFetch('/settings/delivery-locations');
+                cashierDeliveryLocations = res.data || [];
+                const select = document.getElementById('checkoutDeliveryLocation');
+                if (!select) return;
+                const prevVal = select.value;
+                select.innerHTML = '<option value="">-- Choose Delivery Location / Distance --</option>' +
+                    cashierDeliveryLocations.map(loc => `
+                        <option value="${loc.id}">
+                            ${escapeHtml(loc.location_name)} (${Number(loc.distance_km).toFixed(1)} km) — +${formatCurrency(loc.transport_fee)}
+                        </option>
+                    `).join('');
+                if (prevVal) select.value = prevVal;
+            } catch (err) {
+                console.error('loadCashierDeliveryLocations error:', err);
+            }
+        }
+
+        function toggleDeliveryFields() {
+            const isDelivery = document.getElementById('isDeliveryCheckbox')?.checked;
+            const fields = document.getElementById('tabaruqDeliveryFields');
+            if (fields) fields.style.display = isDelivery ? 'block' : 'none';
+
+            const platformSelect = document.getElementById('orderPlatform');
+            if (isDelivery) {
+                if (platformSelect && (platformSelect.value === 'none' || !platformSelect.value)) {
+                    platformSelect.value = 'Tabaruq Delivery';
+                }
+            } else {
+                if (platformSelect && platformSelect.value === 'Tabaruq Delivery') {
+                    platformSelect.value = 'none';
+                }
+                const locSelect = document.getElementById('checkoutDeliveryLocation');
+                if (locSelect) locSelect.value = '';
+                const hint = document.getElementById('deliveryFeeHint');
+                if (hint) hint.style.display = 'none';
+            }
+
+            renderCart();
+            updateCheckoutDiscountCalc();
+        }
+
+        function onDeliveryLocationChange() {
+            const locSelect = document.getElementById('checkoutDeliveryLocation');
+            const hint = document.getElementById('deliveryFeeHint');
+            if (!locSelect || !locSelect.value) {
+                if (hint) hint.style.display = 'none';
+                updateCheckoutDiscountCalc();
+                return;
+            }
+
+            const loc = cashierDeliveryLocations.find(l => String(l.id) === String(locSelect.value));
+            if (loc && hint) {
+                hint.style.display = 'block';
+                hint.innerHTML = `<i class="fas fa-circle-info"></i> Distance: <strong>${Number(loc.distance_km).toFixed(1)} km</strong> | Transport Fee: <strong>${formatCurrency(loc.transport_fee)}</strong> added to food total`;
+            } else if (hint) {
+                hint.style.display = 'none';
+            }
+            updateCheckoutDiscountCalc();
+        }
+
         function updateCheckoutDiscountCalc() {
             const platformSelection = document.getElementById('orderPlatform')?.value || 'none';
-            const platform = (typeof currentMethod !== 'undefined' && currentMethod === 'platform') ? platformSelection : 'none';
+            const isDelivery = document.getElementById('isDeliveryCheckbox')?.checked || platformSelection === 'Tabaruq Delivery';
+            const platform = (typeof currentMethod !== 'undefined' && currentMethod === 'platform')
+                ? platformSelection
+                : (isDelivery ? 'Tabaruq Delivery' : 'none');
             
             let subtotal = 0;
             let autoDiscountTotal = 0;
@@ -535,7 +719,30 @@
 
             const autoBest = previewAutoDiscount(platform);
             const discountAmount = (autoBest && autoBest.amount > 0) ? autoBest.amount : autoDiscountTotal;
-            const payable = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+            const foodPayable = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+
+            // Transport fee based on selected delivery location
+            let deliveryFee = 0;
+            const locSelect = document.getElementById('checkoutDeliveryLocation');
+            const feeRow = document.getElementById('checkoutDeliveryFeeRow');
+            const feeDisplay = document.getElementById('checkoutDeliveryFeeDisplay');
+            const feeLabel = document.getElementById('checkoutDeliveryFeeLabel');
+
+            if (isDelivery && locSelect && locSelect.value) {
+                const loc = cashierDeliveryLocations.find(l => String(l.id) === String(locSelect.value));
+                if (loc) {
+                    deliveryFee = Number(loc.transport_fee) || 0;
+                    if (feeRow) feeRow.style.display = 'flex';
+                    if (feeDisplay) feeDisplay.textContent = `+${formatCurrency(deliveryFee)}`;
+                    if (feeLabel) feeLabel.innerHTML = `<i class="fas fa-truck-moving"></i> Transport Fee (${escapeHtml(loc.location_name)} - ${Number(loc.distance_km).toFixed(1)} km):`;
+                } else {
+                    if (feeRow) feeRow.style.display = 'none';
+                }
+            } else {
+                if (feeRow) feeRow.style.display = 'none';
+            }
+
+            const payable = Math.max(0, Math.round((foodPayable + deliveryFee) * 100) / 100);
 
             const subDisplay = document.getElementById('checkoutSubtotalDisplay');
             const discRow = document.getElementById('checkoutDiscountRow');
@@ -552,7 +759,7 @@
                 if (discDisplay) discDisplay.textContent = `-${formatCurrency(discountAmount)}`;
                 if (discLbl) discLbl.innerHTML = `<i class="fas fa-tag"></i> ${autoBest?.summary || 'Active Discount'}:`;
                 if (origDisplay) {
-                    origDisplay.textContent = formatCurrency(subtotal);
+                    origDisplay.textContent = formatCurrency(subtotal + deliveryFee);
                     origDisplay.style.display = 'inline';
                 }
             } else {
@@ -655,12 +862,119 @@
 
         if (normalizedRole === 'admin') {
             document.getElementById('adminNavLink').style.display = 'block';
+            const stocksLink = document.getElementById('stocksNavLink');
+            if (stocksLink) stocksLink.style.display = 'block';
         }
         if (normalizedRole === 'admin' || normalizedRole === 'cashier') {
             document.getElementById('ordersNavLink').style.display = 'block';
             document.getElementById('scheduledNavLink').style.display = 'block';
             document.getElementById('deliveryNavLink').style.display = 'block';
         }
+
+        // ─── Cashier Stock Intake ─────────────────────────────────────────────
+        let allIngredientsList = [];
+
+        async function openStockIntakeModal() {
+            try {
+                const res = await apiFetch('/inventory');
+                const allItems = res.data || [];
+                allIngredientsList = allItems.filter(item => item.item_type === 'ingredient');
+                if (allIngredientsList.length === 0) allIngredientsList = allItems;
+
+                const select = document.getElementById('stockIntakeItemSelect');
+                select.innerHTML = '<option value="">-- Choose Stock Item --</option>' +
+                    '<option value="__new__">+ Add New Stock Item (e.g. Meat, Maize)</option>' +
+                    allIngredientsList.map(item => `
+                        <option value="${item.id}" data-unit="${escapeHtml(item.unit || 'kg')}" data-cost="${item.cost_price || 0}">
+                            ${escapeHtml(item.name)}
+                        </option>
+                    `).join('');
+
+                document.getElementById('stockIntakeForm').reset();
+                document.getElementById('newStockItemFields').style.display = 'none';
+                document.getElementById('stockIntakeUnit').value = 'kg';
+                document.getElementById('stockIntakeExpenseCheck').checked = true;
+                document.getElementById('stockIntakeModal').style.display = 'flex';
+            } catch (err) {
+                alert('Could not load stock items: ' + err.message);
+            }
+        }
+
+        function closeStockIntakeModal() {
+            document.getElementById('stockIntakeModal').style.display = 'none';
+        }
+
+        function onStockIntakeItemChange() {
+            const select = document.getElementById('stockIntakeItemSelect');
+            const newFields = document.getElementById('newStockItemFields');
+            const unitInput = document.getElementById('stockIntakeUnit');
+            const costInput = document.getElementById('stockIntakeCost');
+
+            if (select.value === '__new__') {
+                newFields.style.display = 'block';
+                document.getElementById('newStockItemName').focus();
+            } else {
+                newFields.style.display = 'none';
+                const selectedOpt = select.selectedOptions[0];
+                if (selectedOpt) {
+                    const unit = selectedOpt.getAttribute('data-unit') || 'kg';
+                    const cost = selectedOpt.getAttribute('data-cost') || '';
+                    if (unitInput) unitInput.value = unit;
+                    if (costInput && cost) costInput.value = cost;
+                }
+            }
+        }
+
+        document.getElementById('stockIntakeForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const select = document.getElementById('stockIntakeItemSelect');
+            const isNew = select.value === '__new__';
+            const itemId = !isNew ? select.value : null;
+            const itemName = isNew ? document.getElementById('newStockItemName').value.trim() : null;
+            const category = isNew ? document.getElementById('newStockItemCategory').value : null;
+            const quantity = parseFloat(document.getElementById('stockIntakeQty').value);
+            const unit = document.getElementById('stockIntakeUnit').value.trim() || 'kg';
+            const cost_price = parseFloat(document.getElementById('stockIntakeCost').value) || 0;
+            const supplier = document.getElementById('stockIntakeSupplier').value.trim();
+            const notes = document.getElementById('stockIntakeNotes').value.trim();
+            const record_expense = document.getElementById('stockIntakeExpenseCheck').checked;
+
+            if (isNew && !itemName) {
+                alert('Please enter a name for the new stock item (e.g. Meat or Maize).');
+                return;
+            }
+            if (!quantity || isNaN(quantity) || quantity <= 0) {
+                alert('Please enter a valid quantity greater than zero.');
+                return;
+            }
+
+            const btn = document.getElementById('saveStockIntakeBtn');
+            try {
+                if (btn) btn.disabled = true;
+                const res = await apiFetch('/inventory/intake', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        item_id: itemId,
+                        item_name: itemName,
+                        category,
+                        quantity,
+                        unit,
+                        cost_price,
+                        supplier,
+                        notes,
+                        record_expense
+                    })
+                });
+
+                closeStockIntakeModal();
+                alert(res.message || 'Stock intake recorded successfully!');
+                await loadMenu();
+            } catch (err) {
+                alert('Failed to record stock intake: ' + err.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
 
         function openExpenseModal() {
             document.getElementById('posExpDate').value = new Date().toISOString().split('T')[0];
@@ -886,7 +1200,16 @@
         }
 
         function updateCartPrices() {
+            const platform = document.getElementById('orderPlatform')?.value;
+            if (platform === 'Tabaruq Delivery') {
+                const delCheck = document.getElementById('isDeliveryCheckbox');
+                if (delCheck && !delCheck.checked) {
+                    delCheck.checked = true;
+                    toggleDeliveryFields();
+                }
+            }
             renderCart();
+            updateCheckoutDiscountCalc();
         }
 
         function removeFromCart(index) {
@@ -897,6 +1220,7 @@
 
         document.getElementById('checkoutBtn').onclick = () => {
             setPaymentMethod('mpesa_offline');
+            loadCashierDeliveryLocations();
             updateCheckoutDiscountCalc();
             document.getElementById('checkoutModal').style.display = 'flex';
         };
@@ -955,6 +1279,11 @@
             document.getElementById('postCheckoutModal').style.display = 'none';
             document.getElementById('isScheduledCheckbox').checked = false;
             document.getElementById('scheduledFields').style.display = 'none';
+            const delCheck = document.getElementById('isDeliveryCheckbox');
+            if (delCheck) {
+                delCheck.checked = false;
+                toggleDeliveryFields();
+            }
             document.getElementById('paymentMethodSection').style.display = 'block';
             setPaymentMethod('mpesa_offline');
             cart = [];
@@ -1042,6 +1371,13 @@
                             <div class="meta-item" style="font-weight: bold;"><span>${discountLabel}:</span> <span>-${formatCurrency(order.discount_amount)}</span></div>
                         </div>
                         ` : ''}
+                        ${Number(order.delivery_fee) > 0 ? `
+                        <div style="border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; font-size: 13px;">
+                            <div class="meta-item"><span>Delivery Destination:</span> <strong>${escapeHtml(order.delivery_location_name || 'Tabaruq Delivery')} (${Number(order.delivery_distance || 0).toFixed(1)} km)</strong></div>
+                            ${order.delivery_address ? `<div class="meta-item"><span>Address:</span> <span>${escapeHtml(order.delivery_address)}</span></div>` : ''}
+                            <div class="meta-item" style="font-weight: bold;"><span>Transport Fee:</span> <span>+${formatCurrency(order.delivery_fee)}</span></div>
+                        </div>
+                        ` : ''}
                         <div class="total">Total Amount: ${formatCurrency(order.total_amount)}</div>
                         ${(order.payment_method) ? `
                         <div class="meta-item" style="margin-top: 6px; font-size: 12px;"><span>Payment:</span> <strong>${order.payment_method}${order.transaction_id ? ' (' + order.transaction_id + ')' : ''}</strong></div>
@@ -1075,6 +1411,17 @@
                 document.getElementById('postModalCustomer').textContent = order.customer_name || 'Guest';
                 document.getElementById('postModalDate').textContent = new Date(order.created_at).toLocaleString();
                 document.getElementById('postModalTotal').textContent = formatCurrency(order.total_amount);
+
+                const deliveryEl = document.getElementById('postModalDelivery');
+                if (deliveryEl) {
+                    if (Number(order.delivery_fee) > 0 || order.delivery_location_name) {
+                        deliveryEl.style.display = 'block';
+                        deliveryEl.innerHTML = `<i class="fas fa-motorcycle"></i> Delivery: <strong>${escapeHtml(order.delivery_location_name || 'Tabaruq Delivery')}</strong> (${Number(order.delivery_distance || 0).toFixed(1)} km) &mdash; Transport Fee: <strong>${formatCurrency(order.delivery_fee)}</strong>${order.delivery_address ? `<br><small style="color: rgba(255,255,255,0.85);">${escapeHtml(order.delivery_address)}</small>` : ''}`;
+                    } else {
+                        deliveryEl.style.display = 'none';
+                        deliveryEl.innerHTML = '';
+                    }
+                }
 
                 const discountEl = document.getElementById('postModalDiscount');
                 if (Number(order.discount_amount) > 0) {
@@ -1185,14 +1532,26 @@
             const btn = document.getElementById('savePendingOrderBtn');
             const customerName = document.getElementById('custName').value.trim();
             const platformSelection = document.getElementById('orderPlatform')?.value || 'none';
-            const platform = currentMethod === 'platform' ? platformSelection : 'none';
+            const isDelivery = document.getElementById('isDeliveryCheckbox')?.checked || platformSelection === 'Tabaruq Delivery';
+            const locSelect = document.getElementById('checkoutDeliveryLocation');
+            const deliveryAddress = document.getElementById('checkoutDeliveryAddress')?.value.trim();
+
+            if (isDelivery) {
+                if (!locSelect || !locSelect.value) {
+                    alert('Please select the delivery location where the delivery is going!');
+                    if (locSelect) locSelect.focus();
+                    return;
+                }
+            }
+
+            const platform = isDelivery ? 'Tabaruq Delivery' : (currentMethod === 'platform' ? platformSelection : 'none');
             const platform_order_id = currentMethod === 'platform' ? document.getElementById('platformOrderId').value : null;
             const total = cart.reduce((acc, item) => {
                 let price = Number(item.selling_price);
                 if (platformSelection === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platformSelection === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
                 if (platformSelection === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
-                if (platformSelection === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
+                if ((platformSelection === 'Tabaruq Delivery' || isDelivery) && item.own_delivery_price) price = Number(item.own_delivery_price);
                 return acc + (price * item.quantity);
             }, 0);
             const isScheduled = document.getElementById('isScheduledCheckbox').checked;
@@ -1210,6 +1569,9 @@
                 platform: platform !== 'none' ? platform : null,
                 platform_order_id,
                 scheduled_for,
+                is_delivery: isDelivery,
+                delivery_location_id: isDelivery && locSelect && locSelect.value ? Number(locSelect.value) : null,
+                delivery_address: isDelivery ? deliveryAddress : null
             };
 
             btn.disabled = true;
@@ -1227,18 +1589,30 @@
 
         document.getElementById('processPaymentBtn').onclick = async () => {
             const platformSelection = document.getElementById('orderPlatform')?.value || 'none';
+            const isDelivery = document.getElementById('isDeliveryCheckbox')?.checked || platformSelection === 'Tabaruq Delivery';
+            const locSelect = document.getElementById('checkoutDeliveryLocation');
+            const deliveryAddress = document.getElementById('checkoutDeliveryAddress')?.value.trim();
+
+            if (isDelivery) {
+                if (!locSelect || !locSelect.value) {
+                    alert('Please select the delivery location where the delivery is going!');
+                    if (locSelect) locSelect.focus();
+                    return;
+                }
+            }
+
+            const platform = isDelivery ? 'Tabaruq Delivery' : (currentMethod === 'platform' ? document.getElementById('orderPlatform').value : 'none');
+            const platform_order_id = currentMethod === 'platform' ? document.getElementById('platformOrderId').value : null;
             const total = cart.reduce((acc, item) => {
                 let price = Number(item.selling_price);
                 if (platformSelection === 'Uber Eats' && item.uber_price) price = Number(item.uber_price);
                 if (platformSelection === 'Glovo' && item.glovo_price) price = Number(item.glovo_price);
                 if (platformSelection === 'Bolt Food' && item.bolt_price) price = Number(item.bolt_price);
-                if (platformSelection === 'Tabaruq Delivery' && item.own_delivery_price) price = Number(item.own_delivery_price);
+                if ((platformSelection === 'Tabaruq Delivery' || isDelivery) && item.own_delivery_price) price = Number(item.own_delivery_price);
                 return acc + (price * item.quantity);
             }, 0);
             const customerName = document.getElementById('custName').value.trim();
             const bankConfirmationCode = currentMethod === 'bank' ? document.getElementById('bankConfirmationCode').value.trim() : null;
-            const platform = currentMethod === 'platform' ? document.getElementById('orderPlatform').value : 'none';
-            const platform_order_id = currentMethod === 'platform' ? document.getElementById('platformOrderId').value : null;
 
             if (currentMethod === 'bank' && !bankConfirmationCode) {
                 alert('Please enter the bank confirmation code.');
@@ -1265,7 +1639,10 @@
                 customer_name: customerName,
                 platform: platform !== 'none' ? platform : null,
                 platform_order_id: platform_order_id,
-                scheduled_for: scheduled_for
+                scheduled_for: scheduled_for,
+                is_delivery: isDelivery,
+                delivery_location_id: isDelivery && locSelect && locSelect.value ? Number(locSelect.value) : null,
+                delivery_address: isDelivery ? deliveryAddress : null
             };
 
             try {
@@ -1370,6 +1747,7 @@
 
         setPaymentMethod('mpesa_offline');
         loadMenu();
+        loadCashierDeliveryLocations();
         checkBadges();
         setInterval(checkBadges, 10000);
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };

@@ -84,7 +84,7 @@
     <div class="layout">
         <aside class="sidebar">
             <h2>TABARUQ</h2>
-            <ul class="nav-links">
+            <ul class="nav-links" id="sidebarLinks">
                 <li><a href="index.html"><i class="fas fa-home"></i> Dashboard</a></li>
                 <li><a href="../cashier/index.html"><i class="fas fa-utensils"></i> Food & Drinks POS</a></li>
                 <li><a href="../cashier/orders.html"><i class="fas fa-check-double"></i> Confirm Payments <span id="pendingBadge" class="notification-badge" style="display: none;">0</span></a></li>
@@ -109,7 +109,10 @@
                     <h1 style="color: #ffffff; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2);">Stock & Ingredients</h1>
                     <p class="card-small" style="color: rgba(255,255,255,0.85); font-weight: 500;">Manage raw hotel ingredients, restock supplies, and record daily usage in the kitchen.</p>
                 </div>
-                <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add Ingredient</button>
+                <div style="display:flex; gap:0.75rem;">
+                    <button class="btn btn-success" style="background:var(--accent-success); color:#fff; font-weight:700;" onclick="openStockIntakeModal()"><i class="fas fa-truck-loading"></i> Record Stock Intake</button>
+                    <button id="addIngredientBtn" class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add Ingredient</button>
+                </div>
             </header>
 
             <section class="glass-card outgoing-food-panel" aria-labelledby="outgoingFoodTitle">
@@ -169,7 +172,7 @@
                 </div>
             </div>
 
-            <div class="glass-card" style="margin-top:2rem;">
+            <div class="glass-card" id="deductionRulesCard" style="margin-top:2rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; gap:1rem; flex-wrap:wrap;">
                     <div><h3 style="color:#fff; margin:0;">Stock Deduction Rules</h3><p class="card-small" style="margin:0.35rem 0 0; color:rgba(255,255,255,0.72);">Choose how many menu items must be sold before 1 stock unit is deducted.</p></div>
                 </div>
@@ -182,7 +185,7 @@
                 <div class="table-container"><table><thead><tr><th>Rule</th><th>Sells Per Stock Quantity</th><th>Progress</th><th>Action</th></tr></thead><tbody id="deductionRulesBody"></tbody></table></div>
             </div>
 
-            <div class="glass-card" style="margin-top:2rem;">
+            <div class="glass-card" id="stockFlowCard" style="margin-top:2rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
                     <h3 style="color:#fff; margin:0;">Recent Stock Flow</h3>
                     <span class="badge" style="background: var(--primary);">Last 40 entries</span>
@@ -330,8 +333,92 @@
         </div>
     </div>
 
+    <!-- Record Stock Intake Modal -->
+    <div id="stockIntakeModal" class="modal">
+        <div class="modal-content" style="max-width: 520px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                <div>
+                    <h2 style="margin: 0; color: #ffffff; font-weight: 800; font-size: 1.25rem;"><i class="fas fa-truck-loading" style="margin-right: 0.5rem; color: var(--accent-success);"></i> Record Stock Intake</h2>
+                    <p style="margin: 0.25rem 0 0; color: rgba(255,255,255,0.7); font-size: 0.82rem;">Record meat, maize, cooking oil, or any incoming hotel supplies.</p>
+                </div>
+                <button type="button" style="background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer;" onclick="closeStockIntakeModal()">&times;</button>
+            </div>
+            <form id="stockIntakeForm">
+                <div class="form-group">
+                    <label style="color: #fff; font-weight: 600;">Stock Item / Ingredient <span style="color: var(--accent-danger);">*</span></label>
+                    <select id="stockIntakeItemSelect" class="form-control" onchange="onStockIntakeItemChange()" required style="background: rgba(0,0,0,0.3); color: #fff;">
+                        <option value="">-- Choose Ingredient or Add New --</option>
+                        <option value="__NEW__" style="font-weight: 700; color: #38bdf8;">+ Add New Ingredient (Meat, Maize, Supplies...)</option>
+                    </select>
+                </div>
+
+                <div id="newStockItemFields" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label style="color: #fff; font-size: 0.85rem;">New Ingredient Name <span style="color: var(--accent-danger);">*</span></label>
+                        <input type="text" id="newStockItemName" class="form-control" placeholder="e.g. Meat (Beef), Maize, Cooking Oil">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="color: #fff; font-size: 0.85rem;">Category</label>
+                            <input type="text" id="newStockItemCategory" class="form-control" list="ingredientCategoryList" placeholder="e.g. Meat & Poultry">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="color: #fff; font-size: 0.85rem;">Alert Threshold</label>
+                            <input type="number" id="newStockItemAlert" class="form-control" step="0.01" min="0" value="5" placeholder="e.g. 5">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 0.75rem;">
+                    <div class="form-group">
+                        <label style="color: #fff; font-weight: 600;">Quantity Arrived <span style="color: var(--accent-danger);">*</span></label>
+                        <input type="number" id="stockIntakeQty" class="form-control" required min="0.01" step="0.01" placeholder="e.g. 25">
+                    </div>
+                    <div class="form-group">
+                        <label style="color: #fff; font-weight: 600;">Unit <span style="color: var(--accent-danger);">*</span></label>
+                        <input type="text" id="stockIntakeUnit" class="form-control" required placeholder="e.g. kg, liters, bags" value="kg">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="color: #fff; font-weight: 600;">Total Purchase Cost (KES) <small style="color: rgba(255,255,255,0.6);">(Optional)</small></label>
+                    <input type="number" id="stockIntakeCost" class="form-control" min="0" step="0.01" placeholder="e.g. 12500">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group">
+                        <label style="color: #fff;">Supplier / Source <small style="color: rgba(255,255,255,0.6);">(Optional)</small></label>
+                        <input type="text" id="stockIntakeSupplier" class="form-control" placeholder="e.g. City Butchery">
+                    </div>
+                    <div class="form-group">
+                        <label style="color: #fff;">Notes / Invoice # <small style="color: rgba(255,255,255,0.6);">(Optional)</small></label>
+                        <input type="text" id="stockIntakeNotes" class="form-control" placeholder="e.g. Morning supply">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 0.65rem 0.85rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: #fff; font-size: 0.85rem; margin: 0;">
+                        <input type="checkbox" id="stockIntakeExpenseCheck" checked style="accent-color: #10b981; width: 1.1rem; height: 1.1rem;">
+                        <span>Record total cost as a hotel expense automatically</span>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem;">
+                    <button type="button" class="btn" style="background: #64748b; color: white;" onclick="closeStockIntakeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success" id="saveStockIntakeBtn" style="background: var(--accent-success); color: white; font-weight: 700;"><i class="fas fa-check-circle"></i> Save Stock Intake</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script><script src="../js/api.js"></script>
     <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const normalizedRole = String(user?.role || '').toLowerCase();
+        if (!user || normalizedRole !== 'admin') {
+            window.location.href = '../index.html';
+        }
+
         let ingredients = [];
         let allInventory = [];
 
@@ -343,8 +430,8 @@
                 ingredients = allInventory.filter(item => item.item_type === 'ingredient');
                 populateOutgoingFoodItems(document.getElementById('outgoingFoodItem')?.value || '');
                 populateDeductionRuleItems();
-                renderStocks(ingredients);
                 loadDeductionRules();
+                renderStocks(ingredients);
             } catch (err) {
                 alert(err.message);
             }
@@ -666,8 +753,126 @@
             socket.on('order_update', checkPendingPayments);
         }
 
-        const user = JSON.parse(localStorage.getItem('user'));
-        if (!user || String(user.role || '').toLowerCase() !== 'admin') window.location.href = '../index.html';
+        // Stock Intake Handlers (Cashier & Admin)
+        function openStockIntakeModal(preselectedId = null) {
+            const select = document.getElementById('stockIntakeItemSelect');
+            select.innerHTML = '<option value="">-- Choose Ingredient or Add New --</option>' +
+                '<option value="__NEW__" style="font-weight: 700; color: #38bdf8;">+ Add New Ingredient (Meat, Maize, Supplies...)</option>' +
+                ingredients.map(item => `
+                    <option value="${item.id}" data-unit="${item.unit || 'kg'}" data-cost="${item.cost_price || 0}">
+                        ${item.name} (Current: ${item.quantity} ${item.unit || 'pcs'})
+                    </option>
+                `).join('');
+
+            if (preselectedId) {
+                select.value = String(preselectedId);
+            } else {
+                select.value = '';
+            }
+
+            onStockIntakeItemChange();
+            document.getElementById('stockIntakeQty').value = '';
+            document.getElementById('stockIntakeCost').value = '';
+            document.getElementById('stockIntakeSupplier').value = '';
+            document.getElementById('stockIntakeNotes').value = '';
+            document.getElementById('stockIntakeUnit').value = 'kg';
+            document.getElementById('stockIntakeExpenseCheck').checked = true;
+            document.getElementById('stockIntakeModal').style.display = 'flex';
+        }
+
+        function closeStockIntakeModal() {
+            document.getElementById('stockIntakeModal').style.display = 'none';
+        }
+
+        function onStockIntakeItemChange() {
+            const select = document.getElementById('stockIntakeItemSelect');
+            const newFields = document.getElementById('newStockItemFields');
+            const unitInput = document.getElementById('stockIntakeUnit');
+            const newNameInput = document.getElementById('newStockItemName');
+
+            if (select.value === '__NEW__') {
+                newFields.style.display = 'block';
+                newNameInput.required = true;
+                newNameInput.focus();
+            } else {
+                newFields.style.display = 'none';
+                newNameInput.required = false;
+                if (select.value) {
+                    const opt = select.options[select.selectedIndex];
+                    if (opt && opt.dataset.unit) {
+                        unitInput.value = opt.dataset.unit;
+                    }
+                }
+            }
+        }
+
+        document.getElementById('stockIntakeForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const select = document.getElementById('stockIntakeItemSelect');
+            const isNew = select.value === '__NEW__';
+            const quantity = parseFloat(document.getElementById('stockIntakeQty').value);
+            const unit = document.getElementById('stockIntakeUnit').value.trim();
+            const totalCost = parseFloat(document.getElementById('stockIntakeCost').value) || 0;
+            const supplier = document.getElementById('stockIntakeSupplier').value.trim();
+            const notes = document.getElementById('stockIntakeNotes').value.trim();
+            const createExpense = document.getElementById('stockIntakeExpenseCheck').checked;
+
+            if (!quantity || quantity <= 0) {
+                alert('Please enter a valid quantity received.');
+                return;
+            }
+
+            let payload = {
+                quantity,
+                unit,
+                total_cost: totalCost,
+                supplier,
+                notes,
+                create_expense: createExpense
+            };
+
+            if (isNew) {
+                const name = document.getElementById('newStockItemName').value.trim();
+                const category = document.getElementById('newStockItemCategory').value.trim() || 'Supplies';
+                const low_stock_threshold = parseFloat(document.getElementById('newStockItemAlert').value) || 5;
+                if (!name) {
+                    alert('Please enter the name of the new ingredient (e.g. Meat, Maize, Oil).');
+                    return;
+                }
+                payload.is_new_item = true;
+                payload.name = name;
+                payload.category = category;
+                payload.low_stock_threshold = low_stock_threshold;
+            } else {
+                if (!select.value) {
+                    alert('Please select an ingredient or choose "+ Add New Ingredient".');
+                    return;
+                }
+                payload.is_new_item = false;
+                payload.item_id = Number(select.value);
+            }
+
+            const saveBtn = document.getElementById('saveStockIntakeBtn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            try {
+                const res = await apiFetch('/inventory/intake', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+
+                closeStockIntakeModal();
+                alert(res.message || 'Stock intake recorded successfully!');
+                await loadStocks();
+                await loadStockFlow();
+            } catch (err) {
+                alert('Failed to record stock intake: ' + err.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-check-circle"></i> Save Stock Intake';
+            }
+        };
 
         async function checkPendingPayments() {
             try {
@@ -684,7 +889,10 @@
             } catch (err) { console.error(err); }
         }
 
-        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.onclick = () => { localStorage.clear(); window.location.href = '../index.html'; };
+        }
 
         loadStocks();
         loadStockFlow();

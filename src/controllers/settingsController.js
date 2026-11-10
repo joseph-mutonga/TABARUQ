@@ -323,3 +323,139 @@ exports.deleteRecipe = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABARUQ DELIVERY DISTANCE & TRANSPORT FEES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/settings/delivery-locations
+ * Returns active delivery locations for cashiers, or all locations for admin.
+ */
+exports.getDeliveryLocations = async (req, res) => {
+    try {
+        const isAdminUser = req.user && req.user.role === 'admin';
+        const showAll = isAdminUser && (req.query.all === 'true' || req.query.all === '1');
+        
+        let query = 'SELECT * FROM delivery_locations';
+        if (!showAll) {
+            query += ' WHERE is_active = 1';
+        }
+        query += ' ORDER BY distance_km ASC, location_name ASC';
+
+        const [rows] = await db.execute(query);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('getDeliveryLocations error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * POST /api/settings/delivery-locations
+ * Body: { location_name, distance_km, transport_fee, notes, is_active }
+ */
+exports.saveDeliveryLocation = async (req, res) => {
+    const { location_name, distance_km, transport_fee, notes, is_active } = req.body;
+
+    if (!location_name || !location_name.trim()) {
+        return res.status(400).json({ success: false, message: 'Delivery location name is required' });
+    }
+
+    const dist = Number(distance_km);
+    if (!Number.isFinite(dist) || dist < 0) {
+        return res.status(400).json({ success: false, message: 'Distance must be a valid number (>= 0)' });
+    }
+
+    const fee = Number(transport_fee);
+    if (!Number.isFinite(fee) || fee < 0) {
+        return res.status(400).json({ success: false, message: 'Transport fee must be a valid number (>= 0)' });
+    }
+
+    try {
+        const [result] = await db.execute(`
+            INSERT INTO delivery_locations (location_name, distance_km, transport_fee, notes, is_active)
+            VALUES (?, ?, ?, ?, ?)
+        `, [
+            location_name.trim(),
+            dist,
+            fee,
+            notes ? notes.trim() : null,
+            is_active === false || is_active === 0 ? 0 : 1
+        ]);
+
+        res.status(201).json({
+            success: true,
+            message: 'Delivery location saved successfully',
+            data: { id: result.insertId }
+        });
+    } catch (err) {
+        console.error('saveDeliveryLocation error:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    }
+};
+
+/**
+ * PUT /api/settings/delivery-locations/:id
+ * Body: { location_name, distance_km, transport_fee, notes, is_active }
+ */
+exports.updateDeliveryLocation = async (req, res) => {
+    const { id } = req.params;
+    const { location_name, distance_km, transport_fee, notes, is_active } = req.body;
+
+    if (!location_name || !location_name.trim()) {
+        return res.status(400).json({ success: false, message: 'Delivery location name is required' });
+    }
+
+    const dist = Number(distance_km);
+    if (!Number.isFinite(dist) || dist < 0) {
+        return res.status(400).json({ success: false, message: 'Distance must be a valid number (>= 0)' });
+    }
+
+    const fee = Number(transport_fee);
+    if (!Number.isFinite(fee) || fee < 0) {
+        return res.status(400).json({ success: false, message: 'Transport fee must be a valid number (>= 0)' });
+    }
+
+    try {
+        const [result] = await db.execute(`
+            UPDATE delivery_locations 
+            SET location_name = ?, distance_km = ?, transport_fee = ?, notes = ?, is_active = ?
+            WHERE id = ?
+        `, [
+            location_name.trim(),
+            dist,
+            fee,
+            notes ? notes.trim() : null,
+            is_active === false || is_active === 0 ? 0 : 1,
+            id
+        ]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'Delivery location not found' });
+        }
+
+        res.json({ success: true, message: 'Delivery location updated successfully' });
+    } catch (err) {
+        console.error('updateDeliveryLocation error:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    }
+};
+
+/**
+ * DELETE /api/settings/delivery-locations/:id
+ */
+exports.deleteDeliveryLocation = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [result] = await db.execute('DELETE FROM delivery_locations WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'Delivery location not found' });
+        }
+        res.json({ success: true, message: 'Delivery location deleted successfully' });
+    } catch (err) {
+        console.error('deleteDeliveryLocation error:', err);
+        res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    }
+};
+

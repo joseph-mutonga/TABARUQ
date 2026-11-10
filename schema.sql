@@ -148,6 +148,11 @@ CREATE TABLE IF NOT EXISTS orders (
     discount_given_at TIMESTAMP NULL DEFAULT NULL,
     discount_source ENUM('manual', 'auto') DEFAULT NULL, -- how the discount was applied: by an admin, or automatically by a discount rule
     discount_rule_id INT DEFAULT NULL, -- the discount_rules row that auto-applied this discount, if any
+    delivery_location_id INT DEFAULT NULL,
+    delivery_location_name VARCHAR(150) DEFAULT NULL,
+    delivery_distance DECIMAL(6, 2) DEFAULT NULL,
+    delivery_fee DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    delivery_address VARCHAR(255) DEFAULT NULL,
     UNIQUE KEY platform_order (platform, platform_order_id),
     INDEX idx_orders_created_at (created_at),
     FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL,
@@ -318,6 +323,31 @@ CREATE TABLE IF NOT EXISTS discount_rules (
 );
 
 ALTER TABLE orders ADD CONSTRAINT fk_orders_discount_rule FOREIGN KEY (discount_rule_id) REFERENCES discount_rules(id) ON DELETE SET NULL;
+
+-- 23. Delivery Locations table (Distance-based transport fees for Tabaruq Deliveries)
+CREATE TABLE IF NOT EXISTS delivery_locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    location_name VARCHAR(150) NOT NULL,
+    distance_km DECIMAL(6, 2) NOT NULL DEFAULT 0.00,
+    transport_fee DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    notes VARCHAR(255) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_delivery_locations_active (is_active)
+);
+
+ALTER TABLE orders ADD CONSTRAINT fk_orders_delivery_location FOREIGN KEY (delivery_location_id) REFERENCES delivery_locations(id) ON DELETE SET NULL;
+
+-- Seed initial popular delivery areas with distance and transport fees
+INSERT IGNORE INTO delivery_locations (id, location_name, distance_km, transport_fee, notes) VALUES
+    (1, 'Eastleigh (Within 2km)', 2.00, 100.00, 'Immediate local delivery'),
+    (2, 'Pangani / Ngara', 3.50, 150.00, 'Short distance delivery'),
+    (3, 'CBD / City Center', 4.50, 200.00, 'Town delivery'),
+    (4, 'Parklands / Highridge', 5.50, 250.00, 'Medium distance delivery'),
+    (5, 'Kilimani / Hurlingham', 7.00, 300.00, 'Long distance delivery'),
+    (6, 'Westlands', 8.00, 350.00, 'Westlands and environs'),
+    (7, 'South B / South C', 6.50, 250.00, 'South B and South C areas');
 
 -- Seed initial values for platforms
 INSERT IGNORE INTO platform_commissions (platform, commission_percentage) VALUES 
